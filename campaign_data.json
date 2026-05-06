@@ -1,0 +1,272 @@
+{
+  "Akira Kurosawa": [
+    {
+      "title": "Seven Samurai",
+      "id": 346,
+      "difficultyMult": 1
+    },
+    {
+      "title": "Yojimbo",
+      "id": 11878,
+      "difficultyMult": 1.25
+    },
+    {
+      "title": "Rashomon",
+      "id": 548,
+      "difficultyMult": 1.5
+    },
+    {
+      "title": "Ran",
+      "id": 11645,
+      "difficultyMult": 1.75
+    },
+    {
+      "title": "Dreams",
+      "id": 1117857,
+      "difficultyMult": 2
+    }
+  ],
+  "Agnès Varda": [
+    {
+      "title": "Cléo from 5 to 7",
+      "id": 499,
+      "difficultyMult": 1
+    },
+    {
+      "title": "Vagabond",
+      "id": 44018,
+      "difficultyMult": 1.25
+    },
+    {
+      "title": "Le Bonheur",
+      "id": 53023,
+      "difficultyMult": 1.5
+    },
+    {
+      "title": "Faces Places",
+      "id": 451995,
+      "difficultyMult": 1.75
+    },
+    {
+      "title": "The Gleaners & I",
+      "id": 44379,
+      "difficultyMult": 2
+    }
+  ],
+  "Satyajit Ray": [
+    {
+      "title": "Pather Panchali",
+      "id": 5801,
+      "difficultyMult": 1
+    },
+    {
+      "title": "Aparajito",
+      "id": 897,
+      "difficultyMult": 1.25
+    },
+    {
+      "title": "The World of Apu",
+      "id": 896,
+      "difficultyMult": 1.5
+    },
+    {
+      "title": "Charulata",
+      "id": 35790,
+      "difficultyMult": 1.75
+    },
+    {
+      "title": "The Music Room",
+      "id": 822,
+      "difficultyMult": 2
+    }
+  ],
+  "Spike Lee": [
+    {
+      "title": "Do the Right Thing",
+      "id": 925,
+      "difficultyMult": 1
+    },
+    {
+      "title": "Malcolm X",
+      "id": 1883,
+      "difficultyMult": 1.25
+    },
+    {
+      "title": "BlacKkKlansman",
+      "id": 487558,
+      "difficultyMult": 1.5
+    },
+    {
+      "title": "25th Hour",
+      "id": 1429,
+      "difficultyMult": 1.75
+    },
+    {
+      "title": "Bamboozled",
+      "id": 24664,
+      "difficultyMult": 2
+    }
+  ],
+  "Jane Campion": [
+    {
+      "title": "The Piano",
+      "id": 713,
+      "difficultyMult": 1
+    },
+    {
+      "title": "Bright Star",
+      "id": 29963,
+      "difficultyMult": 1.25
+    },
+    {
+      "title": "The Power of the Dog",
+      "id": 600583,
+      "difficultyMult": 1.5
+    },
+    {
+      "title": "In the Cut",
+      "id": 10944,
+      "difficultyMult": 1.75
+    },
+    {
+      "title": "An Angel at My Table",
+      "id": 2891,
+      "difficultyMult": 2
+    }
+  ],
+  "Bong Joon-ho": [
+    {
+      "title": "Parasite",
+      "id": 496243,
+      "difficultyMult": 1
+    },
+    {
+      "title": "Snowpiercer",
+      "id": 110415,
+      "difficultyMult": 1.25
+    },
+    {
+      "title": "Memories of Murder",
+      "id": 11423,
+      "difficultyMult": 1.5
+    },
+    {
+      "title": "The Host",
+      "id": 1255,
+      "difficultyMult": 1.75
+    },
+    {
+      "title": "Barking Dogs Never Bite",
+      "id": 21531,
+      "difficultyMult": 2
+    }
+  ],
+  "Guillermo del Toro": [
+    {
+      "title": "Pan's Labyrinth",
+      "id": 1417,
+      "difficultyMult": 1
+    },
+    {
+      "title": "Hellboy",
+      "id": 456740,
+      "difficultyMult": 1.25
+    },
+    {
+      "title": "The Shape of Water",
+      "id": 399055,
+      "difficultyMult": 1.5
+    },
+    {
+      "title": "Crimson Peak",
+      "id": 201085,
+      "difficultyMult": 1.75
+    },
+    {
+      "title": "The Devil's Backbone",
+      "id": 1433,
+      "difficultyMult": 2
+    }
+  ],
+  "John Singleton": [
+    {
+      "title": "Boyz n the Hood",
+      "id": 650,
+      "difficultyMult": 1
+    },
+    {
+      "title": "Poetic Justice",
+      "id": 8291,
+      "difficultyMult": 1.25
+    },
+    {
+      "title": "Baby Boy",
+      "id": 16161,
+      "difficultyMult": 1.5
+    },
+    {
+      "title": "Higher Learning",
+      "id": 16295,
+      "difficultyMult": 1.75
+    },
+    {
+      "title": "Rosewood",
+      "id": 25624,
+      "difficultyMult": 2
+    }
+  ],
+  "Ava DuVernay": [
+    {
+      "title": "Selma",
+      "id": 273895,
+      "difficultyMult": 1
+    },
+    {
+      "title": "13th",
+      "id": 13207,
+      "difficultyMult": 1.25
+    },
+    {
+      "title": "Middle of Nowhere",
+      "id": 19688,
+      "difficultyMult": 1.5
+    },
+    {
+      "title": "I Will Follow",
+      "id": 72946,
+      "difficultyMult": 1.75
+    },
+    {
+      "title": "This is the Life",
+      "id": 97399,
+      "difficultyMult": 2
+    }
+  ],
+  "Chloe Zhao": [
+    {
+      "title": "Nomadland",
+      "id": 581734,
+      "difficultyMult": 1
+    },
+    {
+      "title": "Eternals",
+      "id": 524434,
+      "difficultyMult": 1.25
+    },
+    {
+      "title": "The Rider",
+      "id": 453278,
+      "difficultyMult": 1.5
+    },
+    {
+      "title": "Songs My Brothers Taught Me",
+      "id": 308640,
+      "difficultyMult": 1.75
+    },
+    {
+      "title": "Daughters",
+      "id": 739556,
+      "difficultyMult": 2
+    }
+  ]
+}
