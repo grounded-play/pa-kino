@@ -57,12 +57,7 @@ export default class MenuScene extends Phaser.Scene {
         this.titleImage.setPipeline('ChromaKey');
         this.titleImage.setDepth(92);
 
-        this.titleBumper = this.bgScene.matter.add.rectangle(width / 2, height - 210, 300, 110, {
-            isStatic: true,
-            restitution: 0.92,
-            friction: 0.05,
-            label: 'menu_bumper'
-        });
+
         this.titleLogo = this.bgScene.matter.add.image(width / 2, -300, 'tcc_logo', null, {
             restitution: 0.7,
             friction: 0.03,
@@ -129,13 +124,21 @@ export default class MenuScene extends Phaser.Scene {
             restitution: 0.72,
             friction: 0.02,
             frictionAir: 0.015,
-            density: 0.0015
+            density: 0.0015,
+            collisionFilter: {
+                category: this.bgScene.CAT_UI,
+                mask: this.bgScene.CAT_UI | this.bgScene.CAT_BALL // Collide with stoppers and balls (if we want them to hit)
+            }
         }).setFixedRotation();
         this.memoryButtonVisualBody = this.bgScene.matter.add.gameObject(this.memoryBtnContainer, {
             restitution: 0.72,
             friction: 0.02,
             frictionAir: 0.015,
-            density: 0.0015
+            density: 0.0015,
+            collisionFilter: {
+                category: this.bgScene.CAT_UI,
+                mask: this.bgScene.CAT_UI | this.bgScene.CAT_BALL // Collide with stoppers and balls
+            }
         }).setFixedRotation();
 
         this.setButtonEnabled(this.startBtnContainer, false);
@@ -145,6 +148,9 @@ export default class MenuScene extends Phaser.Scene {
         this.playMenuIntroSequence();
 
         this.events.once('shutdown', () => {
+            this.cleanupPersistentMenuBodies();
+            this.cleanupMenuWorldBodies();
+            
             if (this.menuImpactHandler && this.bgScene && this.bgScene.matter && this.bgScene.matter.world) {
                 this.bgScene.matter.world.off('collisionstart', this.menuImpactHandler);
             }
@@ -162,7 +168,7 @@ export default class MenuScene extends Phaser.Scene {
 
         const MatterLib = Phaser.Physics.Matter.Matter;
         const bodies = MatterLib.Composite.allBodies(this.bgScene.matter.world.localWorld);
-        const removableLabels = new Set(['menu_logo', 'menu_bumper']);
+        const removableLabels = new Set(['menu_logo']);
 
         bodies.forEach((body) => {
             if (!removableLabels.has(body.label)) {
@@ -188,22 +194,12 @@ export default class MenuScene extends Phaser.Scene {
             this.bgScene?.matter?.world?.remove(this.memoryButtonBody);
             this.memoryButtonBody = null;
         }
-
-        if (this.startButtonSpacer) {
-            this.bgScene?.matter?.world?.remove(this.startButtonSpacer);
-            this.startButtonSpacer = null;
-        }
-
-        if (this.memoryButtonSpacer) {
-            this.bgScene?.matter?.world?.remove(this.memoryButtonSpacer);
-            this.memoryButtonSpacer = null;
-        }
     }
 
     createMenuBounds(width, height) {
         const invisible = { isStatic: true, render: { visible: false } };
         const thickness = 60; // Match CabinetScene bezel
-        this.bgScene.matter.add.rectangle(width / 2, height - thickness + 10, width + 400, 40, { ...invisible, label: 'menu_floor' });
+        this.bgScene.matter.add.rectangle(width / 2, height - 10, width + 400, 40, { ...invisible, label: 'menu_floor' });
         this.bgScene.matter.add.rectangle(thickness - 10, height / 2, 40, height * 2, { ...invisible, label: 'menu_wall' });
         this.bgScene.matter.add.rectangle(width - thickness + 10, height / 2, 40, height * 2, { ...invisible, label: 'menu_wall' });
     }
@@ -243,7 +239,7 @@ export default class MenuScene extends Phaser.Scene {
                 const labelA = pair.bodyA.label;
                 const labelB = pair.bodyB.label;
                 const hitTitle = labelA === 'menu_logo' || labelB === 'menu_logo';
-                const hitLanding = ['menu_floor', 'menu_bumper'].includes(labelA) || ['menu_floor', 'menu_bumper'].includes(labelB);
+                const hitLanding = labelA === 'menu_floor' || labelB === 'menu_floor';
 
                 if (hitTitle && hitLanding) {
                     this.hasMenuImpact = true;
@@ -380,7 +376,11 @@ export default class MenuScene extends Phaser.Scene {
                 restitution: 0.95,
                 friction: 0,
                 frictionStatic: 0,
-                label: 'menu_button'
+                label: 'menu_button',
+                collisionFilter: {
+                    category: this.bgScene.CAT_UI,
+                    mask: this.bgScene.CAT_UI // ONLY collide with visual buttons
+                }
             });
         } else {
             this.bgScene.matter.body.setPosition(this.startButtonBody, { x: centerX, y: startY });
@@ -392,36 +392,14 @@ export default class MenuScene extends Phaser.Scene {
                 restitution: 0.95,
                 friction: 0,
                 frictionStatic: 0,
-                label: 'menu_button'
+                label: 'menu_button',
+                collisionFilter: {
+                    category: this.bgScene.CAT_UI,
+                    mask: this.bgScene.CAT_UI // ONLY collide with visual buttons
+                }
             });
         } else {
             this.bgScene.matter.body.setPosition(this.memoryButtonBody, { x: centerX, y: memoryY });
-        }
-
-        if (!this.startButtonSpacer) {
-            this.startButtonSpacer = this.bgScene.matter.add.rectangle(centerX, startY + 56, 430, 14, {
-                isStatic: true,
-                restitution: 0.98,
-                friction: 0,
-                frictionStatic: 0,
-                label: 'menu_button_spacer',
-                render: { visible: false }
-            });
-        } else {
-            this.bgScene.matter.body.setPosition(this.startButtonSpacer, { x: centerX, y: startY + 56 });
-        }
-
-        if (!this.memoryButtonSpacer) {
-            this.memoryButtonSpacer = this.bgScene.matter.add.rectangle(centerX, memoryY - 48, 360, 14, {
-                isStatic: true,
-                restitution: 0.98,
-                friction: 0,
-                frictionStatic: 0,
-                label: 'menu_button_spacer',
-                render: { visible: false }
-            });
-        } else {
-            this.bgScene.matter.body.setPosition(this.memoryButtonSpacer, { x: centerX, y: memoryY - 48 });
         }
     }
 

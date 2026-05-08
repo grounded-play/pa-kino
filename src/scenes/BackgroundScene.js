@@ -4,15 +4,16 @@ import { GameState } from '../GameState.js';
 export default class BackgroundScene extends Phaser.Scene {
     constructor() {
         super({ key: 'BackgroundScene', active: false });
+        this.CAT_BALL = 1;
+        this.CAT_ROCK = 2;
+        this.CAT_LOGO = 4;
+        this.CAT_UI = 8;
     }
 
     create() {
         const { width, height } = this.scale;
         
-        // Define collision categories
-        this.CAT_BALL = this.matter.world.nextCategory();
-        this.CAT_ROCK = this.matter.world.nextCategory();
-        this.CAT_LOGO = this.matter.world.nextCategory();
+        // Categories are pre-defined in constructor to avoid race conditions during scene initialization
 
         this.clickRipplesEnabled = true;
         this.ballsVisible = true;
