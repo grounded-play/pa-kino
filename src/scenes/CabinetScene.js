@@ -6,6 +6,10 @@ export default class CabinetScene extends Phaser.Scene {
         super({ key: 'CabinetScene', active: false });
         this.scanlineTextureKey = 'cabinet-scanline-strip';
         this.scanlineBaseAlpha = 0.15;
+        this.scanlineScrollSpeed = 1;
+        this.scanlineScrollOffset = 0;
+        this.scanlineJitterOffsetX = 0;
+        this.scanlineJitterOffsetY = 0;
     }
 
     create() {
@@ -112,21 +116,16 @@ export default class CabinetScene extends Phaser.Scene {
     }
 
     addScanlines(width, height) {
-        this.scanlines = this.add.tileSprite(0, 0, width, height, this.scanlineTextureKey)
-            .setOrigin(0, 0)
-            .setAlpha(this.scanlineBaseAlpha);
+        this.scanlines = this.add.container(0, 0);
+        this.scanlinesPrimary = this.add.tileSprite(0, 0, width, height, this.scanlineTextureKey)
+            .setOrigin(0, 0);
+        this.scanlinesSecondary = this.add.tileSprite(0, 0, width, height, this.scanlineTextureKey)
+            .setOrigin(0, 0);
 
+        this.scanlines.add([this.scanlinesPrimary, this.scanlinesSecondary]);
+        this.syncScanlineLayers();
         this.overlayContainer.add(this.scanlines);
         this.refreshScanlines();
-
-        // Hardware-accelerated UV scroll gives a much smoother CRT crawl than moving geometry.
-        this.scanlineTween = this.tweens.add({
-            targets: this.scanlines,
-            tilePositionY: 4,
-            duration: 4000,
-            repeat: -1,
-            ease: 'Linear'
-        });
 
         this.handleScanlineImpact = (intensity = 1) => {
             this.triggerScanlineJitter(intensity);
@@ -147,30 +146,61 @@ export default class CabinetScene extends Phaser.Scene {
             this.scanlineJitterTween.stop();
         }
 
-        const baseY = this.scanlines.tilePositionY;
         const offsetX = 2 * intensity;
         const offsetY = 1.5 * intensity;
 
         // Briefly wobble the UVs and thicken the effect with a stronger alpha spike.
         this.scanlineJitterTween = this.tweens.add({
-            targets: this.scanlines,
-            tilePositionX: { from: -offsetX, to: offsetX },
-            tilePositionY: { from: baseY - offsetY, to: baseY + offsetY },
-            alpha: { from: this.scanlineBaseAlpha, to: Math.min(0.35, this.scanlineBaseAlpha + (0.08 * intensity)) },
+            targets: this,
+            scanlineJitterOffsetX: { from: -offsetX, to: offsetX },
+            scanlineJitterOffsetY: { from: -offsetY, to: offsetY },
+            scanlineBaseAlpha: { from: 0.15, to: Math.min(0.35, 0.15 + (0.08 * intensity)) },
             duration: 45,
             yoyo: true,
             repeat: 2,
+            onUpdate: () => {
+                this.syncScanlineLayers();
+            },
             onComplete: () => {
-                if (!this.scanlines) {
+                if (!this.scanlinesPrimary || !this.scanlinesSecondary) {
                     return;
                 }
 
-                this.scanlines.tilePositionX = 0;
-                this.scanlines.tilePositionY = baseY;
-                this.scanlines.alpha = this.scanlineBaseAlpha;
+                this.scanlineJitterOffsetX = 0;
+                this.scanlineJitterOffsetY = 0;
+                this.scanlineBaseAlpha = 0.15;
+                this.syncScanlineLayers();
                 this.scanlineJitterTween = null;
             }
         });
+    }
+
+    update(_time, delta) {
+        if (!this.scanlinesPrimary || !this.scanlinesSecondary) {
+            return;
+        }
+
+        this.scanlineScrollOffset = (this.scanlineScrollOffset + ((delta / 1000) * this.scanlineScrollSpeed)) % 4;
+        this.syncScanlineLayers();
+    }
+
+    syncScanlineLayers() {
+        if (!this.scanlinesPrimary || !this.scanlinesSecondary) {
+            return;
+        }
+
+        const integerOffset = Math.floor(this.scanlineScrollOffset);
+        const fractionalOffset = this.scanlineScrollOffset - integerOffset;
+        const primaryAlpha = this.scanlineBaseAlpha * (1 - fractionalOffset);
+        const secondaryAlpha = this.scanlineBaseAlpha * fractionalOffset;
+
+        this.scanlinesPrimary.tilePositionX = this.scanlineJitterOffsetX;
+        this.scanlinesPrimary.tilePositionY = integerOffset + this.scanlineJitterOffsetY;
+        this.scanlinesPrimary.alpha = primaryAlpha;
+
+        this.scanlinesSecondary.tilePositionX = this.scanlineJitterOffsetX;
+        this.scanlinesSecondary.tilePositionY = integerOffset + 1 + this.scanlineJitterOffsetY;
+        this.scanlinesSecondary.alpha = secondaryAlpha;
     }
 
     addVignette(width, height) {

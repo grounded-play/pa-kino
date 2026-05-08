@@ -35,6 +35,10 @@ export default class PachinkoScene extends Phaser.Scene {
         this.levelReelsDropped = 0;
         this.nextBallId = 1;
         this.readyToWrap = false;
+        this.funnelVelocityX = 0;
+        this.funnelVelocityY = 0;
+        this.lastFunnelX = null;
+        this.lastFunnelY = null;
     }
 
     clampCurrentScore(nextScore = this.currentScore) {
@@ -316,10 +320,16 @@ export default class PachinkoScene extends Phaser.Scene {
     }
 
     createOrganicLayout() {
-        const rows = 9;
+        const rows = 12;
         const spacingX = this.boardWidth / 10;
-        const spacingY = 90;
-        const startY = 180;
+        const startY = 240;
+        const endY = this.boardHeight - 330;
+        const spacingY = (endY - startY) / Math.max(1, rows - 1);
+        const warmPegColor = 0xf2c46d;
+        const featurePegColor = 0xff981f;
+        const lowerPegColor = 0xffb14a;
+        const pegStrokeColor = 0x3a1700;
+        const labelStrokeColor = 0xfff0c7;
 
         for (let row = 0; row < rows; row++) {
             const isEven = row % 2 === 0;
@@ -336,7 +346,7 @@ export default class PachinkoScene extends Phaser.Scene {
 
                 let size = 9 * (this.directorModifiers.monsterPegs ? 2 : 1); // Scaled by 0.9
                 let multiplier = 1;
-                let baseColor = 0xffffff;
+                let baseColor = warmPegColor;
 
                 const hasNoMultiplier = this.directorModifiers.noMultiplier;
 
@@ -344,17 +354,17 @@ export default class PachinkoScene extends Phaser.Scene {
                 if (centerDist < 50) {
                     size = 18;
                     multiplier = 5;
-                    baseColor = 0xffcc00;
+                    baseColor = featurePegColor;
                 } else if (row === rows - 1) {
                     size = 14;
                     multiplier = 2;
-                    baseColor = 0x88ccff;
+                    baseColor = lowerPegColor;
                 }
 
                 const isRotatingBouncer = (row + col) % 7 === 0;
                 const pegVisual = isRotatingBouncer
-                    ? this.add.rectangle(x, y, size * 2.3, size * 0.95, baseColor).setStrokeStyle(3, 0x000000).setAngle(35).setDepth(5)
-                    : this.add.circle(x, y, size, baseColor).setStrokeStyle(3, 0x000000).setDepth(5);
+                    ? this.add.rectangle(x, y, size * 2.3, size * 0.95, baseColor).setStrokeStyle(3, pegStrokeColor).setAngle(35).setDepth(5)
+                    : this.add.circle(x, y, size, baseColor).setStrokeStyle(3, pegStrokeColor).setDepth(5);
                 this.boardContainer.add(pegVisual);
 
                 const pegBody = isRotatingBouncer
@@ -386,7 +396,7 @@ export default class PachinkoScene extends Phaser.Scene {
                         fontSize: size >= 20 ? '18px' : '14px',
                         fontFamily: '"VT323", monospace',
                         color: '#2b1400',
-                        stroke: '#fff5cf',
+                        stroke: `#${labelStrokeColor.toString(16).padStart(6, '0')}`,
                         strokeThickness: 3
                     }).setOrigin(0.5).setDepth(6);
                     this.boardContainer.add(multiplierLabel);
@@ -399,8 +409,10 @@ export default class PachinkoScene extends Phaser.Scene {
     }
 
     setupFunnel() {
-        this.funnel = this.add.triangle(this.boardWidth / 2, 80, 0, 0, 60, 0, 30, 40, 0xff8800).setOrigin(0.5);
+        this.funnel = this.add.triangle(this.boardWidth / 2, 68, 0, 0, 60, 0, 30, 40, 0xff8800).setOrigin(0.5);
         this.boardContainer.add(this.funnel);
+        this.lastFunnelX = this.funnel.x;
+        this.lastFunnelY = this.funnel.y;
 
         if (this.directorModifiers.funnelSpeedStatic) {
             return;
@@ -414,6 +426,17 @@ export default class PachinkoScene extends Phaser.Scene {
             repeat: -1,
             ease: 'Sine.easeInOut'
         });
+    }
+
+    getFunnelTipPosition() {
+        if (!this.funnel) {
+            return { x: this.boardWidth / 2, y: 92 };
+        }
+
+        return {
+            x: this.funnel.x,
+            y: this.funnel.y + (this.funnel.displayHeight * 0.5)
+        };
     }
 
     createBuckets() {
@@ -1134,17 +1157,18 @@ export default class PachinkoScene extends Phaser.Scene {
                 return;
             }
 
-            this.dropBall(pointer.x);
+            this.dropBall();
         });
     }
 
-    dropBall(pointerX) {
+    dropBall() {
         if (this.ballsRemaining <= 0) {
             return;
         }
 
-        const spawnX = Phaser.Math.Clamp(pointerX, 80, this.boardWidth - 80);
-        const spawnY = 110;
+        const funnelTip = this.getFunnelTipPosition();
+        const spawnX = Phaser.Math.Clamp(funnelTip.x, 80, this.boardWidth - 80);
+        const spawnY = funnelTip.y;
         const isOscarBall = Math.random() < 0.1;
         const visualKey = isOscarBall ? 'filmreel' : Phaser.Utils.Array.GetRandom(['filmreel', 'vhs', 'dvd']);
         const visual = this.add.image(spawnX, spawnY, visualKey).setDisplaySize(44, 44).setDepth(15);
@@ -1168,6 +1192,11 @@ export default class PachinkoScene extends Phaser.Scene {
         ball.pendingValue = 0;
         ball.ballId = this.nextBallId++;
         ball.expireAt = this.time.now + this.getReelLifetimeMs();
+
+        this.matter.body.setVelocity(ball, {
+            x: this.funnelVelocityX,
+            y: Math.max(0, this.funnelVelocityY)
+        });
 
         this.activeBalls.push(ball);
         this.ballsRemaining -= 1;
@@ -1640,6 +1669,19 @@ export default class PachinkoScene extends Phaser.Scene {
         }
 
         this.syncBackgroundPlatforms();
+
+        if (this.funnel) {
+            if (this.lastFunnelX === null || this.lastFunnelY === null) {
+                this.lastFunnelX = this.funnel.x;
+                this.lastFunnelY = this.funnel.y;
+            } else {
+                const deltaSeconds = Math.max(0.001, this.game.loop.delta / 1000);
+                this.funnelVelocityX = (this.funnel.x - this.lastFunnelX) / deltaSeconds;
+                this.funnelVelocityY = (this.funnel.y - this.lastFunnelY) / deltaSeconds;
+                this.lastFunnelX = this.funnel.x;
+                this.lastFunnelY = this.funnel.y;
+            }
+        }
 
         if (this.oscar?.visual) {
             const t = (time - this.oscar.startTime) / 1000;
