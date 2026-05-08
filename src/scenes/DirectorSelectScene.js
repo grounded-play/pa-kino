@@ -147,7 +147,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
 
         this.uiContainer.add(this.wheelContainer);
 
-        const needle = this.add.triangle(width / 2, this.wheelCenterY - this.wheelRadius - 48, 0, 0, 80, 0, 40, 60, 0xff0000).setOrigin(0.5);
+        const needle = this.add.triangle(width / 2, this.wheelCenterY - this.wheelRadius - 48, 0, 0, 80, 0, 40, 60, 0xff8800).setOrigin(0.5);
         const needlePin = this.add.circle(width / 2, this.wheelCenterY - this.wheelRadius - 48, 10, 0xffaa00);
         this.uiContainer.add([needle, needlePin]);
 

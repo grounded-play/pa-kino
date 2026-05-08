@@ -1643,10 +1643,11 @@ export default class PachinkoScene extends Phaser.Scene {
         GameState.currentRun.lastProductionCost = productionCost;
         GameState.currentRun.lastNetRoundScore = netRoundScore;
         GameState.currentRun.lastExpectedReels = this.levelData.expectedReels || 1;
+        GameState.currentRun.lastReelsDropped = this.levelReelsDropped;
         GameState.currentRun.lastReelsOver = Math.max(0, this.levelReelsDropped - (this.levelData.expectedReels || 1));
         GameState.currentRun.lastRoundScore = netRoundScore;
         GameState.currentRun.lastTargetScore = this.levelData.targetScore;
-        GameState.currentRun.lastRating = Math.max(0, Math.round((netRoundScore / this.levelData.targetScore) * 10) / 10);
+        GameState.currentRun.lastRating = GameState.calculateRating();
         GameState.currentRun.lastCastCount = this.activeCast.length;
 
         // IMDb Ranking Connection

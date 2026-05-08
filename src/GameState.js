@@ -25,6 +25,10 @@ export const GameState = {
         unlockedDirectors: [],
         directorProgress: {},
         filmHighScores: {},
+        bestRating: 0,
+        bestRatingFilm: '',
+        bestGross: 0,
+        bestGrossFilm: '',
         allDirectorsUnlocked: false,
         audioMuted: false,
         masterVolume: 1.0,
@@ -57,6 +61,7 @@ export const GameState = {
         lastProductionCost: 0,
         lastNetRoundScore: 0,
         lastExpectedReels: 0,
+        lastReelsDropped: 0,
         lastReelsOver: 0,
         lastTargetScore: 0,
         lastRating: 0,
@@ -93,6 +98,7 @@ export const GameState = {
             lastProductionCost: 0,
             lastNetRoundScore: 0,
             lastExpectedReels: 0,
+            lastReelsDropped: 0,
             lastReelsOver: 0,
             lastTargetScore: 0,
             lastRating: 0,
@@ -129,6 +135,7 @@ export const GameState = {
             lastProductionCost: 0,
             lastNetRoundScore: 0,
             lastExpectedReels: 0,
+            lastReelsDropped: 0,
             lastReelsOver: 0,
             lastTargetScore: 0,
             lastRating: 0,
@@ -172,6 +179,36 @@ export const GameState = {
 
     getGalleryFilmsForDirector(directorName) {
         return this.persistentGallery.filter((film) => film.directorName === directorName);
+    },
+
+    calculateRating(run = this.currentRun) {
+        const actual = run.lastReelsDropped || 0;
+        const expected = run.lastExpectedReels || 1;
+        const net = run.lastNetRoundScore || 0;
+        const target = run.lastTargetScore || 1;
+        const actors = run.lastCastCount || 0;
+        
+        let score = 0;
+        // All or Nothing: Hit Target
+        if (net >= 0) score += 2; 
+
+        // All or Nothing: Reel Plan (penalty if over)
+        if (actual <= expected) {
+            score += 3; 
+            score += Math.max(0, expected - actual); // Efficiency bonus still applies
+        } else {
+            score -= (actual - expected); // -1 per reel over
+        }
+
+        // All or Nothing: Ensemble (Must get all 3)
+        if (actors >= 3) {
+            score += 3;
+        }
+        
+        if (net >= target * 1.5) score += 1;
+        if (net >= target * 2.0) score += 1;
+        
+        return Math.max(0, Math.min(10, score));
     },
 
     getBestProduction() {
@@ -219,8 +256,26 @@ export const GameState = {
         this.unlockFilm(film, this.currentRun.directorName);
 
         if (!this.currentRun.completedFilms.find((entry) => entry.id === film.id)) {
-            this.currentRun.completedFilms.push({ ...film, directorName: this.currentRun.directorName });
+            const completedEntry = { 
+                ...film, 
+                directorName: this.currentRun.directorName,
+                rating: this.currentRun.lastRating || 0,
+                gross: this.currentRun.lastGrossRoundScore || 0,
+                cost: this.currentRun.lastProductionCost || 0,
+                net: this.currentRun.lastNetRoundScore || 0
+            };
+            this.currentRun.completedFilms.push(completedEntry);
             this.persistentStats.totalFilmsCompleted += 1;
+
+            // Track career bests
+            if (completedEntry.rating > (this.persistentStats.bestRating || 0)) {
+                this.persistentStats.bestRating = completedEntry.rating;
+                this.persistentStats.bestRatingFilm = film.title;
+            }
+            if (completedEntry.gross > (this.persistentStats.bestGross || 0)) {
+                this.persistentStats.bestGross = completedEntry.gross;
+                this.persistentStats.bestGrossFilm = film.title;
+            }
         }
 
         const directorName = this.currentRun.directorName;
@@ -317,10 +372,6 @@ export const GameState = {
             if (savedStats) {
                 this.persistentStats = { ...this.persistentStats, ...JSON.parse(savedStats) };
             }
-            // User requested stats reset for career values
-            this.persistentStats.lifetimeScore = 0;
-            this.persistentStats.bestScore = 0;
-            this.persistentStats.bestProduction = 0;
         } catch (e) {
             console.warn('Could not load from localStorage');
         }

@@ -157,7 +157,7 @@ export default class ShopScene extends Phaser.Scene {
             fontSize: '26px', fontFamily: '"VT323", monospace', color: '#ffcc00'
         }).setOrigin(0.5).setDepth(11);
 
-        const rating10 = this._calculateRating10(run);
+        const rating10 = GameState.calculateRating(run);
         const dialogue = this._getDialogue(rating10 / 6, run.directorName);
         this.add.text(frameX, blueBoxY + 12, `"${dialogue}"`, {
             fontSize: '18px', fontFamily: '"VT323", monospace', color: '#ffffff', align: 'center',
@@ -285,38 +285,8 @@ export default class ShopScene extends Phaser.Scene {
         }
     }
 
-    _calculateRating10(run) {
-        const actual = run.reelDrops || 0;
-        const expected = run.lastExpectedReels || 1;
-        const net = run.lastNetRoundScore || 0;
-        const target = run.lastTargetScore || 1;
-        const actors = run.lastCastCount || 0;
-        
-        let score = 0;
-        // All or Nothing: Hit Target
-        if (net >= 0) score += 2; 
-
-        // All or Nothing: Reel Plan (penalty if over)
-        if (actual <= expected) {
-            score += 3; 
-            score += Math.max(0, expected - actual); // Efficiency bonus still applies
-        } else {
-            score -= (actual - expected); // -1 per reel over
-        }
-
-        // All or Nothing: Ensemble (Must get all 3)
-        if (actors >= 3) {
-            score += 3;
-        }
-        
-        if (net >= target * 1.5) score += 1;
-        if (net >= target * 2.0) score += 1;
-        
-        return Math.max(0, Math.min(10, score));
-    }
-
     _getBreakdown(run) {
-        const actual = run.reelDrops || 0;
+        const actual = run.lastReelsDropped || 0;
         const expected = run.lastExpectedReels || 1;
         const net = run.lastNetRoundScore || 0;
         const target = run.lastTargetScore || 1;
@@ -386,17 +356,25 @@ export default class ShopScene extends Phaser.Scene {
 
         sy += 75;
 
+        const lastFilm = run.completedFilms[run.completedFilms.length - 1] || {};
         const statRows = [
             { label: 'TOTAL FILMS', value: `${run.currentFilmIndex}/${run.filmography?.length || 5}` },
-            { label: 'LAST FILM NET', value: GameState.formatMillions(run.lastNetRoundScore || 0) },
+            { label: 'LAST GROSS', value: GameState.formatMillions(lastFilm.gross || 0) },
+            { label: 'LAST COSTS', value: GameState.formatMillions(lastFilm.cost || 0), color: '#ff6666' },
+            { label: 'LAST NET', value: GameState.formatMillions(lastFilm.net || 0), color: (lastFilm.net || 0) >= 0 ? '#66ff88' : '#ff6666' },
             { label: 'LIFETIME BOX', value: GameState.formatMillions(run.score) },
             { label: 'TOTAL REELS', value: run.totalReelsDropped || run.reelDrops || 0 }
         ];
 
         statRows.forEach(row => {
-            sidebar.add(this.add.text(pad, sy, row.label, { fontSize: '22px', fontFamily: '"VT323", monospace', color: '#666666' }));
-            sidebar.add(this.add.text(sidebarWidth - pad, sy, row.value, { fontSize: '22px', fontFamily: '"VT323", monospace', color: '#cccccc', align: 'right' }).setOrigin(1, 0));
-            sy += 30;
+            sidebar.add(this.add.text(pad, sy, row.label, { fontSize: '18px', fontFamily: '"VT323", monospace', color: '#666666' }));
+            sidebar.add(this.add.text(sidebarWidth - pad, sy, row.value, { 
+                fontSize: '18px', 
+                fontFamily: '"VT323", monospace', 
+                color: row.color || '#cccccc', 
+                align: 'right' 
+            }).setOrigin(1, 0));
+            sy += 24;
         });
 
         sy += 40;
@@ -448,13 +426,40 @@ export default class ShopScene extends Phaser.Scene {
 
                 if (isCompleted) {
                     const savedFilm = run.completedFilms.find(f => f.id === film.id);
-                    const score = savedFilm?.rating || 0;
-                    sidebar.add(this.add.text(sidebarWidth - pad - 10, rowY + rowH / 2, `${score.toFixed(1)}`, {
-                        fontSize: '22px', fontFamily: '"VT323", monospace', color: '#66ff88'
-                    }).setOrigin(1, 0.5));
+                    const rating = savedFilm?.rating || 0;
+                    const gross = savedFilm?.gross || 0;
+                    
+                    sidebar.add(this.add.text(sidebarWidth - pad - 10, rowY + 15, `${rating.toFixed(1)}/10`, {
+                        fontSize: '18px', fontFamily: '"VT323", monospace', color: '#ffcc00'
+                    }).setOrigin(1, 0));
+
+                    sidebar.add(this.add.text(sidebarWidth - pad - 10, rowY + 45, GameState.formatMillions(gross), {
+                        fontSize: '16px', fontFamily: '"VT323", monospace', color: '#66ff88'
+                    }).setOrigin(1, 0));
                 }
             }
         }
+
+        sy += 5 * (rowH + 6) + 40;
+
+        // ── Career Bests ────────────────────────────────────────────────────────
+        sidebar.add(this.add.text(sidebarWidth / 2, sy, 'CAREER BESTS', {
+            fontSize: '18px', fontFamily: '"VT323", monospace', color: '#444444'
+        }).setOrigin(0.5, 0));
+        sy += 30;
+
+        const bestStats = [
+            { label: 'HIGHEST RATED', value: `${GameState.persistentStats.bestRating?.toFixed(1) || '0.0'}`, sub: GameState.persistentStats.bestRatingFilm || 'NONE' },
+            { label: 'HIGHEST EARNER', value: GameState.formatMillions(GameState.persistentStats.bestGross || 0), sub: GameState.persistentStats.bestGrossFilm || 'NONE' }
+        ];
+
+        bestStats.forEach(stat => {
+            sidebar.add(this.add.text(pad, sy, stat.label, { fontSize: '16px', fontFamily: '"VT323", monospace', color: '#666666' }));
+            sidebar.add(this.add.text(sidebarWidth - pad, sy, stat.value, { fontSize: '18px', fontFamily: '"VT323", monospace', color: '#ffcc00', align: 'right' }).setOrigin(1, 0));
+            sy += 20;
+            sidebar.add(this.add.text(sidebarWidth - pad, sy, stat.sub.toUpperCase(), { fontSize: '14px', fontFamily: '"VT323", monospace', color: '#444444', align: 'right' }).setOrigin(1, 0));
+            sy += 25;
+        });
     }
 
     _resolveDirectorPortraitFrame(run) {

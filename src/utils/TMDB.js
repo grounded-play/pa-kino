@@ -482,6 +482,7 @@ export const TMDB = {
                     : null),
             targetScore,
             balls,
+            expectedReels: balls,
             friction,
             themeColor,
             releaseYear: movieData.release_date ? movieData.release_date.split('-')[0] : 'N/A'
