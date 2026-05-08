@@ -39,6 +39,7 @@ export default class PachinkoScene extends Phaser.Scene {
         this.funnelVelocityY = 0;
         this.lastFunnelX = null;
         this.lastFunnelY = null;
+        this.actorItems = [];
     }
 
     clampCurrentScore(nextScore = this.currentScore) {
@@ -175,6 +176,7 @@ export default class PachinkoScene extends Phaser.Scene {
                 .then(cast => {
                     if (!this.sys.isActive()) return;
                     this.leadCast = cast;
+                    this.spawnActors();
                     this.updateUI();
                 })
                 .catch(() => {});
@@ -726,14 +728,8 @@ export default class PachinkoScene extends Phaser.Scene {
             color: '#66f2ff',
             wordWrap: { width: innerWidth - 24 }
         }).setOrigin(0, 0);
-        this.projectionLabel = this.add.text(padding + 8, currentY + 286, 'LANDED + POSSIBLE: $0M / 0%', {
-            fontSize: '19px',
-            fontFamily: '"VT323", monospace',
-            color: '#f5c518',
-            wordWrap: { width: innerWidth - 24 }
-        }).setOrigin(0, 0);
-        this.activeReelValuesText = this.add.text(padding + 8, currentY + 312, 'REELS LIVE: none', {
-            fontSize: '15px',
+        this.activeReelValuesText = this.add.text(padding + 8, currentY + 286, 'REELS LIVE: none', {
+            fontSize: '16px',
             fontFamily: '"VT323", monospace',
             color: '#aaaaaa',
             wordWrap: { width: innerWidth - 24 }
@@ -751,7 +747,7 @@ export default class PachinkoScene extends Phaser.Scene {
             0x66f2ff,
             1
         ).setOrigin(0, 0.5);
-        this.sidebar.add([statsBox, this.productionCostLabel, this.netBudgetLabel, this.ratingHUD, this.scoreLabel, this.ballLabel, this.droppedLabel, this.expectedReelsLabel, this.padInventoryLabel, this.liveTakeValueLabel, this.projectionLabel, this.activeReelValuesText, this.progressFrame, this.progressFill]);
+        this.sidebar.add([statsBox, this.productionCostLabel, this.netBudgetLabel, this.ratingHUD, this.scoreLabel, this.ballLabel, this.droppedLabel, this.expectedReelsLabel, this.padInventoryLabel, this.liveTakeValueLabel, this.activeReelValuesText, this.progressFrame, this.progressFill]);
         currentY += statsBoxHeight + 16;
 
         this.padModeButton = UI.createChunkyButton(this, sidebarWidth / 2, currentY + 28, sidebarWidth - 36, 56, 'PLACE PADS', () => {
@@ -783,7 +779,7 @@ export default class PachinkoScene extends Phaser.Scene {
         const portraitFrame = this.resolveDirectorPortraitFrame();
         const directorPortraitCard = this.createPortraitCard({
             x: sidebarWidth / 2,
-            y: castSectionY - 228,
+            y: castSectionY - 160,
             texture: this.textures.exists('director_portraits') ? 'director_portraits' : null,
             frame: portraitFrame,
             width: 184,
@@ -989,11 +985,7 @@ export default class PachinkoScene extends Phaser.Scene {
             this.progressFill.width = fillWidth;
         }
 
-        [0.25, 0.5, 0.75].forEach((threshold, index) => {
-            if ((netScore / safeTarget) >= threshold && !this.activeCast.includes(index)) {
-                this.hireActor(index);
-            }
-        });
+        // Removed score-based actor hiring loop as they are now physical items to collect
 
         if (this.padModeButton?.list?.[1]) {
             this.padModeButton.list[1].setText(this.padModeActive ? 'EDIT SET: ON' : 'PLACE PADS');
@@ -1270,6 +1262,8 @@ export default class PachinkoScene extends Phaser.Scene {
                     this.checkBallBucketCollision(ball, other);
                 } else if (other.label === 'oscar') {
                     this.checkOscarCollision(ball);
+                } else if (other.label?.startsWith('actor_')) {
+                    this.handleActorCollection(ball, other);
                 } else if (other.label === 'ball_eater') {
                     this.handleBallEaterCollision(ball, other);
                 } else if (other.label === 'gutter') {
@@ -1455,6 +1449,64 @@ export default class PachinkoScene extends Phaser.Scene {
         });
 
         this.addBark(Phaser.Utils.Array.GetRandom(['GREAT TAKE!', "THAT'S A WRAP!", 'OSCAR-WORTHY!', 'BRILLIANT!', 'CUT! PERFECT!']));
+    }
+
+    spawnActors() {
+        this.actorItems = [];
+        const count = Math.min(3, this.leadCast.length);
+        
+        for (let i = 0; i < count; i++) {
+            const actor = this.leadCast[i];
+            const centerX = Phaser.Math.Between(200, this.boardWidth - 200);
+            const centerY = Phaser.Math.Between(200, this.boardHeight - 320);
+            const orbitRadius = Phaser.Math.Between(60, 140);
+            const orbitSpeed = Phaser.Math.FloatBetween(0.015, 0.025) * (Math.random() < 0.5 ? 1 : -1);
+            
+            const visual = this.add.container(centerX, centerY).setDepth(20);
+            const bg = this.add.circle(0, 0, 34, 0x111111, 0.8).setStrokeStyle(3, 0xffaa00);
+            const text = this.add.text(0, 0, actor.name.split(' ').map(n => n[0]).join(''), {
+                fontSize: '22px',
+                fontFamily: '"VT323", monospace',
+                color: '#ffffff'
+            }).setOrigin(0.5);
+            visual.add([bg, text]);
+            this.boardContainer.add(visual);
+            
+            const body = this.matter.add.circle(centerX + this.margin, centerY + this.margin, 34, {
+                isStatic: true,
+                isSensor: true,
+                label: `actor_${i}`
+            });
+            
+            this.actorItems.push({
+                index: i,
+                actor,
+                visual,
+                body,
+                centerX,
+                centerY,
+                orbitRadius,
+                orbitSpeed,
+                angle: Math.random() * Math.PI * 2
+            });
+        }
+    }
+
+    handleActorCollection(ball, sensor) {
+        const indexStr = sensor.label.split('_')[1];
+        const index = parseInt(indexStr);
+        const item = this.actorItems.find(it => it.index === index);
+        
+        if (!item || this.activeCast.includes(index)) return;
+        
+        this.hireActor(index);
+        
+        // Remove from board
+        item.visual.destroy();
+        this.matter.world.remove(item.body);
+        this.actorItems = this.actorItems.filter(it => it.index !== index);
+        
+        this.cameras.main.flash(200, 255, 200, 0, 0.1);
     }
 
     handlePirateCollision(ball) {
@@ -1686,6 +1738,17 @@ export default class PachinkoScene extends Phaser.Scene {
                 this.lastFunnelX = this.funnel.x;
                 this.lastFunnelY = this.funnel.y;
             }
+        }
+
+        if (this.actorItems) {
+            this.actorItems.forEach(item => {
+                if (!item.body || !item.visual) return;
+                item.angle += item.orbitSpeed;
+                const x = item.centerX + Math.cos(item.angle) * item.orbitRadius;
+                const y = item.centerY + Math.sin(item.angle) * item.orbitRadius;
+                this.matter.body.setPosition(item.body, { x: x + this.margin, y: y + this.margin });
+                item.visual.setPosition(x, y);
+            });
         }
 
         if (this.oscar?.visual) {
