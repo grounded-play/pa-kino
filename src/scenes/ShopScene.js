@@ -6,13 +6,13 @@ export default class ShopScene extends Phaser.Scene {
     constructor() {
         super('ShopScene');
         this.upgradePool = [
-            { id: 'extra_balls', title: '+5 BALLS', desc: 'Add 5 extra film reels to your starting stock.', cost: 3000, mod: { startingBalls: 5 } },
-            { id: 'bouncy_pegs', title: 'BOUNCIER PEGS', desc: 'Pegs gain +25% restitution. Higher bounce, more chaos.', cost: 2500, mod: { pegBounce: 0.25 } },
-            { id: 'big_explosion', title: 'IMAX BLAST', desc: 'Increase anti-stuck explosion radius by 50%.', cost: 2000, mod: { explosionRadiusMult: 1.5 } },
-            { id: 'wide_buckets', title: 'WIDE SCREEN', desc: 'Catch-buckets are 20% wider for easier scoring.', cost: 3500, mod: { bucketWidthMult: 1.2 } },
-            { id: 'slow_funnel', title: 'STEADY CAM', desc: 'The funnel moves 30% slower for precise timing.', cost: 1500, mod: { funnelSpeedMult: 0.7 } },
-            { id: 'stretch_pads', title: 'GRIP EQUIPMENT', desc: 'Start every level with 2 free Stretch Pads.', cost: 2000, mod: { startingStretchPads: 2 } },
-            { id: 'multi_ball', title: 'RE-SHOOTS', desc: 'Gain 3 Multi-Ball powerups for the next film.', cost: 4000, mod: { startingMultiBalls: 3 } }
+            { id: 'extra_balls', title: '+5 REELS', desc: 'Add 5 extra film reels to your starting stock.', cost: 3000, mod: { startingBalls: 5 } },
+            { id: 'bouncy_pegs', title: 'BOUNCIER PEGS', desc: 'Pegs gain +25% restitution. Higher bounce, more chaos.', cost: 4500, mod: { pegBounce: 0.25 } },
+            { id: 'big_explosion', title: 'IMAX BLAST', desc: 'Increase anti-stuck explosion radius by 50%.', cost: 6000, mod: { explosionRadiusMult: 1.5 } },
+            { id: 'wide_buckets', title: 'WIDE SCREEN', desc: 'Catch-buckets are 20% wider for easier scoring.', cost: 5000, mod: { bucketWidthMult: 1.2 } },
+            { id: 'slow_funnel', title: 'STEADY CAM', desc: 'The funnel moves 30% slower for precise timing.', cost: 3500, mod: { funnelSpeedMult: 0.7 } },
+            { id: 'stretch_pads', title: 'GRIP EQUIPMENT', desc: 'Start every level with 2 free Stretch Pads.', cost: 7000, mod: { startingStretchPads: 2 } },
+            { id: 'multi_ball', title: 'RE-SHOOTS', desc: 'Gain 3 Multi-Ball powerups for the next film.', cost: 9000, mod: { startingMultiBalls: 3 } }
         ];
     }
 
@@ -25,6 +25,7 @@ export default class ShopScene extends Phaser.Scene {
         const { width, height } = this.scale;
         const sidebarWidth = Math.max(300, Math.floor(width * 0.3));
         const boardWidth = width - sidebarWidth;
+        const nextFilm = GameState.currentRun.filmography[GameState.currentRun.currentFilmIndex] || null;
 
         // 1. Theme Layout (Respecting 70/Focus, 30/Sidebar)
         this.add.rectangle(0, 0, boardWidth, height, 0x111111).setOrigin(0, 0);
@@ -32,7 +33,9 @@ export default class ShopScene extends Phaser.Scene {
         this.add.rectangle(boardWidth, 0, 4, height, 0xffaa00).setOrigin(0, 0);
 
         // 2. IMDb Rating Recap (Sidebar)
-        const rating = GameState.currentRun.lastRating || 'N/A';
+        const rating = Number.isFinite(GameState.currentRun.lastRating) && GameState.currentRun.lastRating > 0
+            ? GameState.currentRun.lastRating.toFixed(1)
+            : 'N/A';
         const ratingTitle = this.add.text(boardWidth + 20, 40, 'PREVIOUS FILM RATING', {
             fontSize: '24px', fontFamily: '"VT323", monospace', color: '#ffcc00'
         });
@@ -43,34 +46,54 @@ export default class ShopScene extends Phaser.Scene {
         const budgetLabel = this.add.text(boardWidth + 20, 200, 'AVAILABLE BUDGET', {
             fontSize: '20px', fontFamily: '"VT323", monospace', color: '#aaa'
         });
-        this.budgetTxt = this.add.text(boardWidth + 20, 230, `$${GameState.currentRun.score}M`, {
+        this.budgetTxt = this.add.text(boardWidth + 20, 230, GameState.formatMillions(GameState.currentRun.score), {
             fontSize: '44px', fontFamily: '"VT323", monospace', color: '#00ff00'
         });
 
-        // 3. Upgrade Cards (70% Focus Area)
-        const cardWidth = 240;
-        const cardHeight = 360;
-        const startX = (boardWidth / 2) - (cardWidth * 1.5) + 60;
-        const cardY = height / 2 - 40;
+        const nextTitle = this.add.text(boardWidth + 20, 330, 'NEXT FEATURE', {
+            fontSize: '24px', fontFamily: '"VT323", monospace', color: '#66f2ff'
+        });
+        const nextFrame = this.add.rectangle(boardWidth + (sidebarWidth / 2), 520, sidebarWidth - 40, 280, 0x111111).setStrokeStyle(4, 0xffaa00);
+        const nextFilmTitle = this.add.text(boardWidth + (sidebarWidth / 2), 680, nextFilm?.title || 'COMING SOON', {
+            fontSize: '28px', fontFamily: '"VT323", monospace', color: '#ffffff', align: 'center', wordWrap: { width: sidebarWidth - 80 }
+        }).setOrigin(0.5);
+
+        const nextPosterKey = GameState.currentRun.nextPosterKey;
+        if (nextPosterKey && this.textures.exists(nextPosterKey)) {
+            const poster = this.add.image(boardWidth + (sidebarWidth / 2), 520, nextPosterKey).setOrigin(0.5);
+            const scale = Math.min((sidebarWidth - 70) / poster.width, 240 / poster.height);
+            poster.setScale(scale);
+        } else {
+            this.add.text(boardWidth + (sidebarWidth / 2), 520, 'POSTER\nPENDING', {
+                fontSize: '34px', fontFamily: '"VT323", monospace', color: '#777777', align: 'center'
+            }).setOrigin(0.5);
+        }
+
+        // 3. Upgrade Cards (vertical stack for readability)
+        const cardWidth = Math.min(520, boardWidth - 120);
+        const cardHeight = 200;
+        const cardX = boardWidth / 2;
+        const startY = 340;
 
         this.offeredUpgrades.forEach((upgrade, index) => {
-            const container = this.add.container(startX + (index * (cardWidth + 40)), cardY);
+            const container = this.add.container(cardX, startY + (index * 250));
             
             const bg = this.add.rectangle(0, 0, cardWidth, cardHeight, 0x222222).setStrokeStyle(4, 0x444444);
             const filmStrip = this.add.rectangle(0, -cardHeight/2 + 20, cardWidth, 40, 0x000000);
-            const title = this.add.text(0, -cardHeight/2 + 60, upgrade.title, {
-                fontSize: '28px', fontFamily: '"VT323", monospace', color: '#ffcc00', align: 'center', wordWrap: { width: cardWidth - 20 }
-            }).setOrigin(0.5);
+            const title = this.add.text(-cardWidth / 2 + 28, -cardHeight/2 + 58, upgrade.title, {
+                fontSize: '34px', fontFamily: '"VT323", monospace', color: '#ffcc00', align: 'left', wordWrap: { width: cardWidth - 200 }
+            }).setOrigin(0, 0.5);
             
-            const desc = this.add.text(0, -20, upgrade.desc, {
-                fontSize: '18px', fontFamily: '"VT323", monospace', color: '#ccc', align: 'center', wordWrap: { width: cardWidth - 30 }
-            }).setOrigin(0.5);
+            const desc = this.add.text(-cardWidth / 2 + 28, 8, upgrade.desc, {
+                fontSize: '22px', fontFamily: '"VT323", monospace', color: '#ccc', align: 'left', wordWrap: { width: cardWidth - 190 }
+            }).setOrigin(0, 0.5);
 
-            const costBtn = UI.createChunkyButton(this, 0, cardHeight/2 - 50, cardWidth - 40, 60, `$${upgrade.cost}M`, () => {
+            const costBtn = UI.createChunkyButton(this, cardWidth / 2 - 110, 0, 180, 66, GameState.formatMillions(upgrade.cost), () => {
                 this.purchaseUpgrade(upgrade, container);
             });
 
             container.add([bg, filmStrip, title, desc, costBtn]);
+            container.costBtn = costBtn;
             container.setScale(0);
 
             this.tweens.add({
@@ -90,7 +113,7 @@ export default class ShopScene extends Phaser.Scene {
         });
 
         // 4. Footer Controls
-        const nextBtn = UI.createChunkyButton(this, boardWidth / 2, height - 80, 300, 70, 'NEXT FILMING >', () => {
+        const nextBtn = UI.createChunkyButton(this, boardWidth / 2, height - 90, 300, 70, 'NEXT FILMING >', () => {
             if (this.scale.fullscreenSupported && !this.scale.isFullscreen) {
                 this.scale.startFullscreen();
             }
@@ -107,14 +130,16 @@ export default class ShopScene extends Phaser.Scene {
     purchaseUpgrade(upgrade, container) {
         if (GameState.currentRun.score >= upgrade.cost) {
             GameState.currentRun.score -= upgrade.cost;
-            this.budgetTxt.setText(`$${GameState.currentRun.score}M`);
+            this.budgetTxt.setText(GameState.formatMillions(GameState.currentRun.score));
             
             // Apply modifiers
             Object.assign(GameState.currentRun.modifiers, upgrade.mod);
 
             // Visual feedback
-            const label = container.list.find(c => c.text === `$${upgrade.cost}M`);
-            if (label) label.setText('PURCHASED');
+            const label = container.costBtn?.list?.[1];
+            if (label) {
+                label.setText('PURCHASED');
+            }
             container.setAlpha(0.7);
             
             // Disable further clicks on this card

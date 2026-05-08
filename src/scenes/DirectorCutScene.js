@@ -46,6 +46,11 @@ export default class DirectorCutScene extends Phaser.Scene {
             color: '#ffdd88',
             align: 'center'
         }).setOrigin(0.5);
+        summary.setText(
+            `BUDGET EARNED: ${GameState.formatMillions(this.finalScore)}\n` +
+            `FILMS COMPLETED THIS RUN: ${this.moviesCompleted}\n` +
+            `REELS DROPPED: ${this.ballStats.reel + this.ballStats.vhs + this.ballStats.dvd}`
+        );
 
         const subtitle = this.add.text(width / 2, 340, 'WRAPPED FEATURES', {
             fontSize: '36px',
@@ -83,7 +88,13 @@ export default class DirectorCutScene extends Phaser.Scene {
             }
         }
 
-        const statsText = this.add.text(width / 2, height - 320, `--- PRODUCTION STATS ---\nREELS: ${this.ballStats.reel} | VHS: ${this.ballStats.vhs} | DVDs: ${this.ballStats.dvd}`, {
+        GameState.saveRunToGallery(this.win);
+
+        const statsText = this.add.text(width / 2, height - 320,
+            `--- PRODUCTION RECAP ---\n` +
+            `LIFETIME FILMS: ${GameState.persistentStats.totalFilmsCompleted}\n` +
+            `ALL-TIME BEST: ${GameState.formatMillions(GameState.getBestProduction())}\n` +
+            `REELS: ${this.ballStats.reel} | VHS: ${this.ballStats.vhs} | DVDs: ${this.ballStats.dvd}`, {
             fontSize: '32px',
             fontFamily: '"VT323", monospace',
             color: '#ffaa00',
@@ -93,9 +104,8 @@ export default class DirectorCutScene extends Phaser.Scene {
         }).setOrigin(0.5);
         this.uiContainer.add(statsText);
 
-        GameState.saveRunToGallery(this.win);
-
         const continueButton = UI.createChunkyButton(this, width / 2, height - 150, 380, 96, 'CONTINUE', () => {
+            GameState.resetCurrentRun();
             this.scene.start('MenuScene');
         });
         this.uiContainer.add(continueButton);

@@ -9,6 +9,7 @@ import ShopScene from './scenes/ShopScene.js';
 import GameOverScene from './scenes/GameOverScene.js';
 import DirectorCutScene from './scenes/DirectorCutScene.js';
 import CabinetScene from './scenes/CabinetScene.js';
+import CursorScene from './scenes/CursorScene.js';
 import ChromaKeyPipeline from './utils/ChromaKeyPipeline.js';
 import WarpPipeline from './utils/WarpPipeline.js';
 
@@ -25,6 +26,7 @@ const config = {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
         expandParent: true,
+        fullscreenTarget: 'game-container',
         width: 1080,
         height: 1920,
     },
@@ -40,7 +42,7 @@ const config = {
             gravity: { y: 1 } // Standard downward gravity
         }
     },
-    scene: [BootScene, SplashScene, BackgroundScene, MenuScene, DirectorSelectScene, PachinkoScene, ShopScene, GameOverScene, DirectorCutScene, CabinetScene],
+    scene: [BootScene, SplashScene, BackgroundScene, MenuScene, DirectorSelectScene, PachinkoScene, ShopScene, GameOverScene, DirectorCutScene, CabinetScene, CursorScene],
     pipeline: { 
         'ChromaKey': ChromaKeyPipeline,
         'Warp': WarpPipeline

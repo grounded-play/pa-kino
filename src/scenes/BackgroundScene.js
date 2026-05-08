@@ -92,6 +92,7 @@ export default class BackgroundScene extends Phaser.Scene {
         this.timeTick = 0;
         this.wheelVortex = { x: width / 2, y: height * 0.35, radius: 300, power: 0 };
         this.createPhysicalWheel(width / 2, height * 0.35, 300);
+        this.setBgWheelVisible(false);
     }
 
     shouldSpawnClickRipple() {
@@ -119,18 +120,31 @@ export default class BackgroundScene extends Phaser.Scene {
 
     createPhysicalWheel(x, y, radius) {
         // Physical spinning gear in the background
+        this.currentBgWheelRadius = radius;
         this.bgWheelBody = this.matter.add.circle(x, y, radius, {
             isStatic: true,
             restitution: 0.8,
             friction: 0.1,
             label: 'bg_wheel'
         });
+        this.bgWheelCollisionMask = this.bgWheelBody.collisionFilter.mask;
+        this.bgWheelCollisionCategory = this.bgWheelBody.collisionFilter.category;
 
         // Stylized "Back-Gear" visual - Positioned at x,y and drawn at 0,0 for correct rotation
         this.bgWheelVisual = this.add.graphics({ x, y });
+        this.drawBgWheelVisual(radius);
+        this.bgWheelVisual.setDepth(5);
+    }
+
+    drawBgWheelVisual(radius) {
+        if (!this.bgWheelVisual) {
+            return;
+        }
+
+        this.bgWheelVisual.clear();
         this.bgWheelVisual.lineStyle(8, 0xffaa00, 0.15);
         this.bgWheelVisual.strokeCircle(0, 0, radius);
-        
+
         // Draw 12 spokes for a more mechanical look
         for (let i = 0; i < 12; i++) {
             const angle = (i / 12) * Math.PI * 2;
@@ -140,7 +154,6 @@ export default class BackgroundScene extends Phaser.Scene {
                 Math.sin(angle) * radius
             );
         }
-        this.bgWheelVisual.setDepth(5); 
     }
 
     syncBgWheel(rotation) {
@@ -158,8 +171,38 @@ export default class BackgroundScene extends Phaser.Scene {
         this.wheelVortex = { x, y, radius, power };
     }
 
-    setWheelVortex(x, y, radius, power) {
-        this.wheelVortex = { x, y, radius, power };
+    updateWheelLayout(x, y, radius) {
+        if (!this.bgWheelBody || !this.bgWheelVisual) {
+            return;
+        }
+
+        if (this.currentBgWheelRadius !== radius) {
+            this.matter.world.remove(this.bgWheelBody);
+            this.bgWheelBody = this.matter.add.circle(x, y, radius, {
+                isStatic: true,
+                restitution: 0.8,
+                friction: 0.1,
+                label: 'bg_wheel'
+            });
+            this.currentBgWheelRadius = radius;
+            this.drawBgWheelVisual(radius);
+        } else {
+            this.matter.body.setPosition(this.bgWheelBody, { x, y });
+        }
+
+        this.bgWheelVisual.setPosition(x, y);
+    }
+
+    setBgWheelVisible(visible) {
+        if (this.bgWheelVisual) {
+            this.bgWheelVisual.setVisible(visible);
+        }
+
+        if (this.bgWheelBody) {
+            this.bgWheelBody.isSleeping = !visible;
+            this.bgWheelBody.collisionFilter.mask = visible ? this.bgWheelCollisionMask : 0;
+            this.bgWheelBody.collisionFilter.category = visible ? this.bgWheelCollisionCategory : 0;
+        }
     }
 
     spawnCube(onScreen = false) {

@@ -118,6 +118,67 @@ const CAMPAIGN_DATA = {
     ]
 };
 
+const DIRECTOR_PROFILE_FALLBACKS = {
+    'Akira Kurosawa': {
+        birthday: '1910-03-23',
+        place_of_birth: 'Shinagawa, Tokyo, Japan',
+        biography: 'Akira Kurosawa was a Japanese filmmaker whose dynamic editing, weather-lashed action, and moral sweep helped shape modern world cinema.'
+    },
+    'Agnès Varda': {
+        birthday: '1928-05-30',
+        place_of_birth: 'Ixelles, Brussels, Belgium',
+        biography: 'Agnès Varda was a Belgian-born French director, photographer, and essayist whose playful, personal films helped define the Left Bank of the French New Wave.'
+    },
+    'Satyajit Ray': {
+        birthday: '1921-05-02',
+        place_of_birth: 'Calcutta, Bengal Presidency, British India',
+        biography: 'Satyajit Ray was an Indian filmmaker, writer, and composer celebrated for humane storytelling, observational detail, and the Apu Trilogy.'
+    },
+    'Spike Lee': {
+        birthday: '1957-03-20',
+        place_of_birth: 'Atlanta, Georgia, USA',
+        biography: 'Spike Lee is an American director, writer, and producer whose films fuse political urgency, neighborhood specificity, and direct visual address.'
+    },
+    'Jane Campion': {
+        birthday: '1954-04-30',
+        place_of_birth: 'Wellington, New Zealand',
+        biography: 'Jane Campion is a New Zealand filmmaker known for psychologically rich dramas centered on desire, power, and women living against social constraint.'
+    },
+    'John Singleton': {
+        birthday: '1968-01-06',
+        place_of_birth: 'Los Angeles, California, USA',
+        biography: 'John Singleton was an American filmmaker whose work brought South Los Angeles to mainstream cinema with urgency, empathy, and generational perspective.'
+    },
+    'Bong Joon-ho': {
+        birthday: '1969-09-14',
+        place_of_birth: 'Daegu, South Korea',
+        biography: 'Bong Joon-ho is a South Korean filmmaker celebrated for sliding between satire, suspense, and social critique without losing emotional clarity.'
+    },
+    'Ava DuVernay': {
+        birthday: '1972-08-24',
+        place_of_birth: 'Long Beach, California, USA',
+        biography: 'Ava DuVernay is an American filmmaker whose work explores Black history, structural injustice, and intimate character struggle with moral force.'
+    },
+    'Guillermo del Toro': {
+        birthday: '1964-10-09',
+        place_of_birth: 'Guadalajara, Jalisco, Mexico',
+        biography: 'Guillermo del Toro is a Mexican filmmaker known for merging horror, fairy tale imagery, and deep sympathy for monsters and outsiders.'
+    },
+    'Chloe Zhao': {
+        birthday: '1982-03-31',
+        place_of_birth: 'Beijing, China',
+        biography: 'Chloe Zhao is a Chinese-born filmmaker whose spare, lyrical work often blends non-professional performers, landscape, and lived experience.'
+    }
+};
+
+function getFallbackDirectorProfile(name) {
+    return DIRECTOR_PROFILE_FALLBACKS[name] || {
+        birthday: null,
+        place_of_birth: null,
+        biography: ''
+    };
+}
+
 export const TMDB = {
     isConfigured() {
         return Boolean(TMDB_READ_ACCESS_TOKEN || TMDB_API_KEY);
@@ -324,29 +385,30 @@ export const TMDB = {
         return directorPool;
     },
 
-    async getDirectorProfile(personId) {
+    async getDirectorProfile(personId, personName = '') {
+        const fallback = getFallbackDirectorProfile(personName);
         if (!this.isConfigured()) {
             return {
                 profile_path: null,
-                birthday: null,
-                place_of_birth: null,
-                biography: ''
+                birthday: fallback.birthday,
+                place_of_birth: fallback.place_of_birth,
+                biography: fallback.biography
             };
         }
         try {
             const data = await tmdbFetch(`/person/${personId}`);
             return {
                 profile_path: data.profile_path || null,
-                birthday: data.birthday || null,
-                place_of_birth: data.place_of_birth || null,
-                biography: data.biography || ''
+                birthday: data.birthday || fallback.birthday,
+                place_of_birth: data.place_of_birth || fallback.place_of_birth,
+                biography: data.biography || fallback.biography
             };
         } catch(e) {
             return {
                 profile_path: null,
-                birthday: null,
-                place_of_birth: null,
-                biography: ''
+                birthday: fallback.birthday,
+                place_of_birth: fallback.place_of_birth,
+                biography: fallback.biography
             };
         }
     },

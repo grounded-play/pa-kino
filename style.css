@@ -28,14 +28,27 @@ body {
     justify-content: center;
     align-items: center;
     overflow: hidden;
+    cursor: none !important;
 }
 
 #game-container canvas {
     display: block;
+    margin: auto;
     max-width: 100%;
     max-height: 100%;
     box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
     image-rendering: pixelated;
+    cursor: none !important;
+}
+
+#game-container:fullscreen,
+#game-container:-webkit-full-screen {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
 }
 
 #orientation-warning {

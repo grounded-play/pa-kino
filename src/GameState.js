@@ -10,15 +10,19 @@ export const GameState = {
         scanlinesEnabled: true
     },
 
-    // Persistent Data
-    persistentGallery: [], // Array of unlocked film metadata objects
+    persistentGallery: [],
     persistentStats: {
         totalRuns: 0,
         bestScore: 0,
+        bestProduction: 0,
         highestLevel: 0,
         wins: 0,
+        totalFilmsCompleted: 0,
+        lifetimeScore: 0,
+        totalReelsDropped: 0,
         unlockedDirectors: [],
         directorProgress: {},
+        filmHighScores: {},
         allDirectorsUnlocked: false,
         audioMuted: false,
         masterVolume: 1.0,
@@ -28,28 +32,59 @@ export const GameState = {
         scanlinesEnabled: true
     },
 
-    // Current Roguelike Run Data
     currentRun: {
         directorId: null,
         directorName: '',
         directorProfilePath: null,
         directorPortraitFrame: 0,
+        directorPortraitKey: null,
         cinematicFact: '',
         draftingPenalty: 0,
         traitLines: [],
         modifiers: {},
-        filmography: [], // Array of TMDB film objects
+        filmography: [],
         currentPosterKey: null,
         nextPosterKey: null,
         currentFilmIndex: 0,
         score: 0,
+        reelDrops: 0,
+        completedFilms: [],
+        lastRoundScore: 0,
+        lastRating: 0,
         ballStats: { reel: 0, vhs: 0, dvd: 0 },
         inventory: {
-            bouncePads: 3 // Starting items
+            bouncePads: 3
         }
     },
 
-    draftingPenalty: 0, // Deducted balls from re-rolls
+    draftingPenalty: 0,
+
+    createEmptyRun() {
+        return {
+            directorId: null,
+            directorName: '',
+            directorProfilePath: null,
+            directorPortraitFrame: 0,
+            directorPortraitKey: null,
+            cinematicFact: '',
+            draftingPenalty: 0,
+            traitLines: [],
+            modifiers: {},
+            filmography: [],
+            currentPosterKey: null,
+            nextPosterKey: null,
+            currentFilmIndex: 0,
+            score: 0,
+            reelDrops: 0,
+            completedFilms: [],
+            lastRoundScore: 0,
+            lastRating: 0,
+            ballStats: { reel: 0, vhs: 0, dvd: 0 },
+            inventory: {
+                bouncePads: 3
+            }
+        };
+    },
 
     initRun(directorData, filmography) {
         const modifiers = directorData.traits || {};
@@ -62,12 +97,16 @@ export const GameState = {
             cinematicFact: directorData.cinematicFact || '',
             draftingPenalty: this.draftingPenalty,
             traitLines: directorData.traitLines || [],
-            modifiers,
-            filmography: filmography,
+            modifiers: { ...modifiers },
+            filmography: filmography || [],
             currentPosterKey: directorData.currentPosterKey || null,
             nextPosterKey: directorData.nextPosterKey || null,
-            currentFilmIndex: this.persistentStats.directorProgress[directorData.name] || 0,
+            currentFilmIndex: 0,
             score: 0,
+            reelDrops: 0,
+            completedFilms: [],
+            lastRoundScore: 0,
+            lastRating: 0,
             ballStats: { reel: 0, vhs: 0, dvd: 0 },
             inventory: {
                 bouncePads: 3 + (modifiers.startingBouncePads || 0),
@@ -79,64 +118,144 @@ export const GameState = {
         this.draftingPenalty = 0;
     },
 
+    resetCurrentRun() {
+        this.currentRun = this.createEmptyRun();
+        this.draftingPenalty = 0;
+    },
+
     getShopPrice(basePrice) {
         const priceMultiplier = this.currentRun.modifiers?.shopPriceMult ?? 1;
         return Math.max(100, Math.round(basePrice * priceMultiplier));
     },
 
     getCurrentFilm() {
-        if (!this.currentRun.filmography || this.currentRun.filmography.length === 0) return null;
-        return this.currentRun.filmography[this.currentRun.currentFilmIndex];
+        if (!this.currentRun.filmography?.length) {
+            return null;
+        }
+        return this.currentRun.filmography[this.currentRun.currentFilmIndex] || null;
     },
 
-    advanceFilm() {
-        this.currentRun.currentFilmIndex++;
-        
-        // Update persistent campaign progression
+    getDirectorMilestoneCount(directorName) {
+        return Math.max(0, Math.min(5, this.persistentStats.directorProgress[directorName] || 0));
+    },
+
+    getTotalMilestones() {
+        return Object.values(this.persistentStats.directorProgress)
+            .reduce((sum, value) => sum + Math.max(0, Math.min(5, Number(value) || 0)), 0);
+    },
+
+    getGalleryFilmsForDirector(directorName) {
+        return this.persistentGallery.filter((film) => film.directorName === directorName);
+    },
+
+    getBestProduction() {
+        return Math.max(this.persistentStats.bestProduction || 0, this.persistentStats.bestScore || 0);
+    },
+
+    formatMillions(value) {
+        const safeValue = Number(value) || 0;
+        if (Math.abs(safeValue) >= 100) {
+            return `$${Math.round(safeValue)}M`;
+        }
+        return `$${safeValue.toFixed(1)}M`;
+    },
+
+    unlockFilm(film, directorName = this.currentRun.directorName) {
+        if (!film?.id) {
+            return;
+        }
+
+        const existing = this.persistentGallery.find((entry) => entry.id === film.id);
+        if (existing) {
+            if (!existing.directorName && directorName) {
+                existing.directorName = directorName;
+            }
+            return;
+        }
+
+        this.persistentGallery.push({
+            ...film,
+            posterPath: film.posterPath
+                || (film.poster_path
+                    ? (film.poster_path.startsWith('http') || film.poster_path.startsWith('/src/')
+                        ? film.poster_path
+                        : `https://image.tmdb.org/t/p/w500${film.poster_path}`)
+                    : null),
+            directorName
+        });
+    },
+
+    markFilmComplete(film = this.getCurrentFilm(), scoreOverride = this.currentRun.score) {
+        if (!film) {
+            return;
+        }
+
+        this.unlockFilm(film, this.currentRun.directorName);
+
+        if (!this.currentRun.completedFilms.find((entry) => entry.id === film.id)) {
+            this.currentRun.completedFilms.push({ ...film, directorName: this.currentRun.directorName });
+            this.persistentStats.totalFilmsCompleted += 1;
+        }
+
         const directorName = this.currentRun.directorName;
-        const newProgress = this.currentRun.currentFilmIndex;
-        this.persistentStats.directorProgress[directorName] = newProgress;
-        
-        // Unlock all directors if they beat Movie 3 (index 2 implies beating it reaches 3, wait "complete Movie 3" means passing index 2)
-        if (newProgress >= 3) {
+        const milestoneCount = this.currentRun.completedFilms.length;
+        this.persistentStats.directorProgress[directorName] = Math.max(
+            this.getDirectorMilestoneCount(directorName),
+            Math.min(5, milestoneCount)
+        );
+
+        const filmKey = String(film.id);
+        this.persistentStats.filmHighScores[filmKey] = Math.max(
+            this.persistentStats.filmHighScores[filmKey] || 0,
+            Math.floor(scoreOverride || 0)
+        );
+
+        if (this.persistentStats.directorProgress[directorName] >= 3) {
             this.persistentStats.allDirectorsUnlocked = true;
         }
 
-        // Update highest level stat
-        if (this.currentRun.currentFilmIndex > this.persistentStats.highestLevel) {
-            this.persistentStats.highestLevel = this.currentRun.currentFilmIndex;
+        if (!this.persistentStats.unlockedDirectors.includes(directorName) && this.persistentStats.directorProgress[directorName] > 0) {
+            this.persistentStats.unlockedDirectors.push(directorName);
         }
 
+        this.persistentStats.highestLevel = Math.max(this.persistentStats.highestLevel, this.currentRun.currentFilmIndex + 1);
         this.saveData();
+    },
 
-        if (this.currentRun.currentFilmIndex >= this.currentRun.filmography.length) {
-            // Win condition met for the full campaign
-            // Cap at index 4 so they replay the deep cut if they return
-            this.persistentStats.directorProgress[directorName] = this.currentRun.filmography.length - 1;
-            this.saveData();
-            return true;
-        }
-        return false;
+    advanceFilm() {
+        const completedFilm = this.getCurrentFilm();
+        this.markFilmComplete(completedFilm, this.currentRun.score);
+        this.currentRun.currentFilmIndex += 1;
+        this.saveData();
+        return this.currentRun.currentFilmIndex >= this.currentRun.filmography.length;
+    },
+
+    createRunRecap({ win = false, abandoned = false } = {}) {
+        return {
+            win,
+            abandoned,
+            score: Math.floor(this.currentRun.score || 0),
+            moviesCompleted: this.currentRun.completedFilms.length,
+            completedFilms: [...this.currentRun.completedFilms],
+            ballStats: { ...this.currentRun.ballStats },
+            totalReelsDropped: this.currentRun.reelDrops || 0,
+            totalFilmsCompleted: this.persistentStats.totalFilmsCompleted,
+            bestProduction: this.getBestProduction(),
+            lifetimeScore: this.persistentStats.lifetimeScore || 0
+        };
     },
 
     saveRunToGallery(isWin = false) {
-        // Save all beaten films from the current run to the persistent gallery
-        const beatenFilms = this.currentRun.filmography.slice(0, this.currentRun.currentFilmIndex);
-        
-        beatenFilms.forEach(film => {
-            // Check if already in gallery by ID
-            if (!this.persistentGallery.find(g => g.id === film.id)) {
-                this.persistentGallery.push(film);
-            }
-        });
+        this.currentRun.completedFilms.forEach((film) => this.unlockFilm(film, this.currentRun.directorName));
 
-        // Update Stats
-        this.persistentStats.totalRuns++;
-        if (this.currentRun.score > this.persistentStats.bestScore) {
-            this.persistentStats.bestScore = this.currentRun.score;
-        }
+        this.persistentStats.totalRuns += 1;
+        this.persistentStats.bestScore = Math.max(this.persistentStats.bestScore, this.currentRun.score || 0);
+        this.persistentStats.bestProduction = Math.max(this.getBestProduction(), this.currentRun.score || 0);
+        this.persistentStats.lifetimeScore += Math.max(0, this.currentRun.score || 0);
+        this.persistentStats.totalReelsDropped += Math.max(0, this.currentRun.reelDrops || 0);
+
         if (isWin) {
-            this.persistentStats.wins++;
+            this.persistentStats.wins += 1;
             if (!this.persistentStats.unlockedDirectors.includes(this.currentRun.directorName)) {
                 this.persistentStats.unlockedDirectors.push(this.currentRun.directorName);
             }
@@ -149,8 +268,8 @@ export const GameState = {
         try {
             localStorage.setItem('pachinko_gallery', JSON.stringify(this.persistentGallery));
             localStorage.setItem('pachinko_stats', JSON.stringify(this.persistentStats));
-        } catch(e) {
-            console.warn("Could not save to localStorage");
+        } catch (e) {
+            console.warn('Could not save to localStorage');
         }
     },
 
@@ -163,13 +282,16 @@ export const GameState = {
 
             const savedStats = localStorage.getItem('pachinko_stats');
             if (savedStats) {
-                // Merge in case we added new fields to the schema
                 this.persistentStats = { ...this.persistentStats, ...JSON.parse(savedStats) };
             }
-        } catch(e) {
-            console.warn("Could not load from localStorage");
+        } catch (e) {
+            console.warn('Could not load from localStorage');
         }
 
+        this.persistentGallery = (this.persistentGallery || []).map((film) => ({
+            ...film,
+            directorName: film.directorName || ''
+        }));
         this.normalizeAudioSettings();
     },
 
@@ -270,15 +392,10 @@ export const GameState = {
         }
 
         const settings = this.getAudioSettings(scene);
-        
-        // Apply Global Sound Settings
         scene.sound.mute = settings.audioMuted;
         scene.sound.volume = settings.masterVolume;
 
-        // Manage BGM Specifically
         let bgm = scene.sound.get('bgm');
-        
-        // If BGM is in the cache but not yet added to the manager, add it now
         if (!bgm && scene.cache.audio.exists('bgm')) {
             bgm = scene.sound.add('bgm', { loop: true });
         }
@@ -288,7 +405,9 @@ export const GameState = {
 
             const startOrResumeBgm = () => {
                 if (settings.audioMuted) {
-                    if (bgm.isPlaying) bgm.pause();
+                    if (bgm.isPlaying) {
+                        bgm.pause();
+                    }
                     return;
                 }
 
@@ -298,19 +417,19 @@ export const GameState = {
                     bgm.play();
                 }
             };
-            
+
             if (settings.audioMuted) {
-                if (bgm.isPlaying) bgm.pause();
-            } else {
-                if (scene.sound.locked) {
-                    scene.sound.once('unlocked', startOrResumeBgm);
-                } else if (scene.sound.context?.state === 'suspended') {
-                    scene.sound.context.resume()
-                        .then(() => startOrResumeBgm())
-                        .catch((error) => console.warn('BGM resume failed:', error));
-                } else {
-                    startOrResumeBgm();
+                if (bgm.isPlaying) {
+                    bgm.pause();
                 }
+            } else if (scene.sound.locked) {
+                scene.sound.once('unlocked', startOrResumeBgm);
+            } else if (scene.sound.context?.state === 'suspended') {
+                scene.sound.context.resume()
+                    .then(() => startOrResumeBgm())
+                    .catch((error) => console.warn('BGM resume failed:', error));
+            } else {
+                startOrResumeBgm();
             }
         }
 
@@ -324,5 +443,4 @@ export const GameState = {
     }
 };
 
-// Initialize data on load
 GameState.loadData();

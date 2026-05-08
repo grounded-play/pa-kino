@@ -27,13 +27,17 @@ export default class PachinkoScene extends Phaser.Scene {
         this.lastPlanningTintAlpha = 0;
         this.oscar = null;
         this.pirates = [];
+        this.exposureDots = [];
+        this.rotatingBouncers = [];
+        this.ballEaters = [];
+        this.pendingRoundWin = false;
     }
 
     init(data = {}) {
         this.resetSceneState();
 
         // If director was passed explicitly via scene.start, re-initialise the run
-        if (data.director) {
+        if (data.director && !GameState.currentRun.directorId) {
             GameState.initRun(data.director, data.director.films);
         }
 
@@ -58,7 +62,7 @@ export default class PachinkoScene extends Phaser.Scene {
 
         this.invalidRunData = !this.rawFilmData;
         this.currentPosterKey = GameState.currentRun.currentPosterKey || 'current_poster';
-        const margin = 50;
+        const margin = 60;
         const GAME_WIDTH = this.scale.width;
         const safeWidth = GAME_WIDTH - (margin * 2);
         const safeHeight = this.scale.height - (margin * 2);
@@ -70,6 +74,7 @@ export default class PachinkoScene extends Phaser.Scene {
         this.explosionRadius = 100 * (this.directorModifiers.explosionRadiusMult || 1);
         this.dominantColor = 0x222222;
         this.configureLevelData();
+        this.currentScore = Number(GameState.currentRun.score || 0);
     }
 
     preload() {
@@ -145,6 +150,7 @@ export default class PachinkoScene extends Phaser.Scene {
         this.setupPhysicsBoundaries();
         this.createOrganicLayout();
         this.createBuckets();
+        this.createSafetySystems();
         this.setupFunnel();
         this.setupUI();
         this.setupCollisions();
@@ -204,8 +210,8 @@ export default class PachinkoScene extends Phaser.Scene {
             const offsetX = isEven ? spacingX : spacingX / 2;
 
             for (let col = 0; col < cols; col++) {
-                const x = offsetX + (col * spacingX);
-                const y = startY + (row * spacingY);
+                const x = offsetX + (col * spacingX) + Phaser.Math.Between(-18, 18);
+                const y = startY + (row * spacingY) + Phaser.Math.Between(-12, 12);
 
                 if (x > this.boardWidth - 40 || x < 40) {
                     continue;
@@ -228,17 +234,34 @@ export default class PachinkoScene extends Phaser.Scene {
                     baseColor = 0x88ccff;
                 }
 
-                const pegVisual = this.add.circle(x, y, size, baseColor).setStrokeStyle(3, 0x000000).setDepth(5);
+                const isRotatingBouncer = (row + col) % 7 === 0;
+                const pegVisual = isRotatingBouncer
+                    ? this.add.rectangle(x, y, size * 2.3, size * 0.95, baseColor).setStrokeStyle(3, 0x000000).setAngle(35).setDepth(5)
+                    : this.add.circle(x, y, size, baseColor).setStrokeStyle(3, 0x000000).setDepth(5);
                 this.boardContainer.add(pegVisual);
 
-                const pegBody = this.matter.add.circle(x, y, size, {
-                    isStatic: true,
-                    restitution: this.pegRestitution,
-                    friction: this.pegFriction,
-                    label: 'peg'
-                });
+                const pegBody = isRotatingBouncer
+                    ? this.matter.add.rectangle(x, y, size * 2.3, size * 0.95, {
+                        isStatic: true,
+                        angle: Phaser.Math.DegToRad(35),
+                        restitution: this.pegRestitution + 0.08,
+                        friction: this.pegFriction,
+                        label: 'peg'
+                    })
+                    : this.matter.add.circle(x, y, size, {
+                        isStatic: true,
+                        restitution: this.pegRestitution,
+                        friction: this.pegFriction,
+                        label: 'peg'
+                    });
                 pegBody.visual = pegVisual;
                 pegBody.multiplier = multiplier;
+                pegBody.isRotatingBouncer = isRotatingBouncer;
+                pegBody.rotationSpeed = Phaser.Math.FloatBetween(0.01, 0.018) * (Math.random() > 0.5 ? 1 : -1);
+
+                if (isRotatingBouncer) {
+                    this.rotatingBouncers.push(pegBody);
+                }
 
                 let multiplierLabel = null;
                 if (multiplier > 1 && !hasNoMultiplier) {
@@ -329,6 +352,44 @@ export default class PachinkoScene extends Phaser.Scene {
         }
     }
 
+    createSafetySystems() {
+        const eaterY = this.boardHeight - 210;
+        [this.boardWidth * 0.28, this.boardWidth * 0.72].forEach((x) => {
+            const visual = this.add.circle(x, eaterY, 34, 0x771111).setStrokeStyle(4, 0xff4444).setDepth(12);
+            const xMark = this.add.text(x, eaterY, 'X', {
+                fontSize: '44px',
+                fontFamily: '"VT323", monospace',
+                color: '#ffd7d7'
+            }).setOrigin(0.5).setDepth(13);
+            this.boardContainer.add([visual, xMark]);
+            const body = this.matter.add.circle(x, eaterY, 34, {
+                isStatic: true,
+                isSensor: true,
+                label: 'ball_eater'
+            });
+            body.visual = visual;
+            body.labelText = xMark;
+            this.ballEaters.push(body);
+        });
+
+        const gutterHeight = 36;
+        const gutterY = this.boardHeight - 18;
+        const gutterVisual = this.add.rectangle(this.boardWidth / 2, gutterY, this.boardWidth - 100, gutterHeight, 0x3b2a18, 0.95)
+            .setStrokeStyle(3, 0xffaa00)
+            .setDepth(4);
+        const gutterText = this.add.text(this.boardWidth / 2, gutterY, 'SAFETY GUTTER', {
+            fontSize: '20px',
+            fontFamily: '"VT323", monospace',
+            color: '#ffdd99'
+        }).setOrigin(0.5).setDepth(5);
+        this.boardContainer.add([gutterVisual, gutterText]);
+        this.safetyGutterBody = this.matter.add.rectangle(this.boardWidth / 2, gutterY, this.boardWidth - 100, gutterHeight, {
+            isStatic: true,
+            isSensor: true,
+            label: 'gutter'
+        });
+    }
+
     setupUI() {
         const sidebarWidth = this.sidebarWidth;
         const innerWidth = sidebarWidth - 36;
@@ -350,7 +411,9 @@ export default class PachinkoScene extends Phaser.Scene {
             .setStrokeStyle(6, 0xff9f1c);
         this.sidebar.add(sideBg);
 
-        let currentY = 28;
+        let currentY = 24;
+
+        this.createSidebarAudioControls();
 
         this.posterFrame = this.add.rectangle(sidebarWidth / 2, currentY + 150, innerWidth, 280, 0x111111, 1)
             .setStrokeStyle(4, 0xffaa00);
@@ -402,12 +465,15 @@ export default class PachinkoScene extends Phaser.Scene {
         currentY += 62;
 
         // Budget / Score HUD
+        const statsBox = this.add.rectangle(sidebarWidth / 2 - 28, currentY + 54, innerWidth - 70, 118, 0x121212, 0.96)
+            .setStrokeStyle(3, 0xffaa00, 0.9)
+            .setOrigin(0.5);
         this.ratingHUD = this.add.text(padding, currentY, 'PRODUCTION GOAL: 0%', {
             fontSize: '24px',
             fontFamily: '"VT323", monospace',
             color: '#f5c518'
         }).setOrigin(0, 0);
-        this.scoreLabel = this.add.text(padding, currentY + 34, 'RATING: 0', {
+        this.scoreLabel = this.add.text(padding, currentY + 34, 'BUDGET: $0.0M', {
             fontSize: '24px',
             fontFamily: '"VT323", monospace',
             color: '#8cff98'
@@ -417,7 +483,10 @@ export default class PachinkoScene extends Phaser.Scene {
             fontFamily: '"VT323", monospace',
             color: '#ffd2d2'
         }).setOrigin(0, 0);
-        this.sidebar.add([this.ratingHUD, this.scoreLabel, this.ballLabel]);
+        this.progressFrame = this.add.rectangle(sidebarWidth - 34, currentY + 54, 20, 118, 0x060606, 1)
+            .setStrokeStyle(3, 0xffaa00);
+        this.progressFill = this.add.rectangle(sidebarWidth - 34, currentY + 109, 10, 0, 0x66f2ff, 1).setOrigin(0.5, 1);
+        this.sidebar.add([statsBox, this.ratingHUD, this.scoreLabel, this.ballLabel, this.progressFrame, this.progressFill]);
         currentY += 110;
 
         this.padModeButton = UI.createChunkyButton(this, sidebarWidth / 2, currentY + 30, sidebarWidth - 36, 58, 'PLACE PADS', () => {
@@ -446,7 +515,7 @@ export default class PachinkoScene extends Phaser.Scene {
         }).setOrigin(0, 0);
         this.sidebar.add(this.bioText);
 
-        this.castListText = this.add.text(padding, this.scale.height - 390, 'CAST: WAIT FOR IT...', {
+        this.castListText = this.add.text(padding, this.scale.height - 430, 'CAST: WAIT FOR IT...', {
             fontSize: '18px',
             fontFamily: '"VT323", monospace',
             color: '#dddddd',
@@ -454,10 +523,10 @@ export default class PachinkoScene extends Phaser.Scene {
         }).setOrigin(0, 0);
         this.sidebar.add(this.castListText);
 
-        this.castRowY = this.scale.height - 300;
+        this.castRowY = this.scale.height - 340;
         const directorPortraitCard = this.createPortraitCard({
             x: sidebarWidth / 2,
-            y: this.scale.height - 140,
+            y: this.scale.height - 150,
             texture: this.textures.exists('director_portraits') ? 'director_portraits' : null,
             frame: this.directorData.portraitFrame ?? 0,
             width: 110,
@@ -468,8 +537,6 @@ export default class PachinkoScene extends Phaser.Scene {
         this.sidebar.add(directorPortraitCard.container);
         this.directorAvatar = directorPortraitCard.container;
         this.popPortrait(directorPortraitCard.container, directorPortraitCard.sprite, 'sfx_win1');
-
-        this.createSidebarAudioControls();
         this.updateUI();
     }
 
@@ -558,11 +625,16 @@ export default class PachinkoScene extends Phaser.Scene {
         const safeBallsRemaining = Number.isFinite(this.ballsRemaining) ? this.ballsRemaining : 0;
         const safeTarget = Math.max(1, this.levelData?.targetScore || 1);
 
-        this.scoreLabel.setText(`RATING: ${this.currentScore.toLocaleString()}`);
+        this.scoreLabel.setText(`BUDGET: ${GameState.formatMillions(this.currentScore)}`);
         this.ballLabel.setText(`FILM STOCK: ${safeBallsRemaining}`);
 
         const percentage = Math.min(100, Math.floor((this.currentScore / safeTarget) * 100));
         this.ratingHUD.setText(`PRODUCTION GOAL: ${percentage}%`);
+        if (this.progressFill) {
+            const maxHeight = 106;
+            const fillHeight = Math.max(2, maxHeight * (percentage / 100));
+            this.progressFill.height = fillHeight;
+        }
 
         [0.25, 0.5, 0.75].forEach((threshold, index) => {
             if ((this.currentScore / safeTarget) >= threshold && !this.activeCast.includes(index)) {
@@ -575,8 +647,8 @@ export default class PachinkoScene extends Phaser.Scene {
         }
 
         if (this.activeBalls.length > 0) {
-            this.lockStatusText?.setText('BOARD LOCKED\nBalls in motion');
-            this.lockStatusText?.setColor('#ff0000');
+            this.lockStatusText?.setText(`LIVE TAKE\n${this.activeBalls.length} reel(s) in motion`);
+            this.lockStatusText?.setColor('#ffcf66');
         } else if (this.padModeActive) {
             this.lockStatusText?.setText('PLANNING PHASE\nTap the set to place a pad');
             this.lockStatusText?.setColor('#00ff99');
@@ -644,7 +716,7 @@ export default class PachinkoScene extends Phaser.Scene {
             onClose: () => this.matter.world.resume()
         });
 
-        this.settingsBtn = UI.createSettingsButton(this, this.sidebarWidth - 86, 82, () => {
+        this.settingsBtn = UI.createSettingsButton(this, this.sidebarWidth - 70, 58, () => {
             const settings = GameState.getAudioSettings(this);
             if (!this.sound.mute && this.cache.audio.exists('sfx_gear')) {
                 this.sound.play('sfx_gear', { volume: 0.8 * (settings.sfxVolume ?? 1) });
@@ -672,14 +744,18 @@ export default class PachinkoScene extends Phaser.Scene {
     }
 
     dropBall(pointerX) {
-        if (this.ballsRemaining <= 0 || this.activeBalls.length > 0) {
+        if (this.ballsRemaining <= 0) {
             return;
         }
 
         const spawnX = Phaser.Math.Clamp(pointerX, 80, this.boardWidth - 80);
         const spawnY = 110;
-        const visualKey = Phaser.Utils.Array.GetRandom(['filmreel', 'vhs', 'dvd']);
+        const isOscarBall = Math.random() < 0.1;
+        const visualKey = isOscarBall ? 'filmreel' : Phaser.Utils.Array.GetRandom(['filmreel', 'vhs', 'dvd']);
         const visual = this.add.image(spawnX, spawnY, visualKey).setDisplaySize(44, 44).setDepth(15);
+        if (visualKey === 'filmreel') {
+            visual.setTint(isOscarBall ? 0xf5c518 : 0xffffff);
+        }
         this.boardContainer.add(visual);
 
         const ball = this.matter.add.circle(spawnX, spawnY, 20, {
@@ -691,11 +767,19 @@ export default class PachinkoScene extends Phaser.Scene {
         ball.visual = visual;
         ball.scoreMultiplier = 1;
         ball.lastMovingTime = this.time.now;
-        ball.antiStuckTriggered = false;
+        ball.lastExplosionTime = 0;
+        ball.isOscarBall = isOscarBall;
+        ball.ballType = visualKey === 'filmreel' ? 'reel' : visualKey;
 
         this.activeBalls.push(ball);
         this.ballsRemaining -= 1;
+        GameState.currentRun.ballStats[ball.ballType] = (GameState.currentRun.ballStats[ball.ballType] || 0) + 1;
+        GameState.currentRun.reelDrops += 1;
         this.updateUI();
+
+        if (isOscarBall && !this.sound.mute && this.cache.audio.exists('sfx_oscar')) {
+            this.sound.play('sfx_oscar', { volume: 0.6 * (GameState.getAudioSettings(this).sfxVolume ?? 1) });
+        }
 
         // High Speed Trait
         if (this.directorModifiers.ballSpeedMult) {
@@ -754,8 +838,10 @@ export default class PachinkoScene extends Phaser.Scene {
                     this.checkBallBucketCollision(ball, other);
                 } else if (other.label === 'oscar') {
                     this.checkOscarCollision();
-                } else if (other.label === 'pirate') {
-                    this.handlePirateCollision(ball);
+                } else if (other.label === 'ball_eater') {
+                    this.handleBallEaterCollision(ball, other);
+                } else if (other.label === 'gutter') {
+                    this.handleGutterCollision(ball);
                 }
             });
         });
@@ -763,6 +849,9 @@ export default class PachinkoScene extends Phaser.Scene {
 
     handlePegCollision(ball, peg) {
         ball.scoreMultiplier *= (peg.multiplier || 1);
+        this.currentScore += 10;
+        GameState.currentRun.score = this.currentScore;
+        this.spawnExposureDot(ball.position.x, ball.position.y);
 
         if (peg.visual) {
             this.tweens.add({
@@ -774,6 +863,10 @@ export default class PachinkoScene extends Phaser.Scene {
             });
         }
 
+        if (peg.isRotatingBouncer) {
+            peg.rotationSpeed *= -1;
+        }
+
         // Trigger scanline reactive jitter
         this.game.events.emit('game-impact', 0.5);
 
@@ -783,12 +876,14 @@ export default class PachinkoScene extends Phaser.Scene {
                 rate: Phaser.Math.FloatBetween(0.8, 1.2)
             });
         }
+        this.updateUI();
     }
 
     checkBallBucketCollision(ball, bucket) {
         const scoreStr = bucket.label.split('_')[1];
-        const points = parseInt(scoreStr, 10) * (ball.scoreMultiplier || 1);
+        const points = Number(scoreStr) * (ball.scoreMultiplier || 1) * (ball.isOscarBall ? 2.5 : 1);
         this.currentScore += points;
+        GameState.currentRun.score = this.currentScore;
         this.updateUI();
         this.cameras.main.shake(100, 0.01);
 
@@ -817,6 +912,26 @@ export default class PachinkoScene extends Phaser.Scene {
             this.addBark('Brilliant shot!');
         }
 
+        if (ball.isOscarBall) {
+            this.addBark('Oscar bonus!');
+            if (!this.sound.mute && this.cache.audio.exists('sfx_oscar')) {
+                this.sound.play('sfx_oscar', { volume: 1.0 * (GameState.getAudioSettings(this).sfxVolume ?? 1) });
+            }
+        }
+
+        this.removeBall(ball);
+    }
+
+    handleBallEaterCollision(ball, eater) {
+        this.currentScore = Math.max(0, this.currentScore - 50);
+        GameState.currentRun.score = this.currentScore;
+        this.updateUI();
+        this.addBark('Ball eater! -$50M', eater.visual);
+        this.removeBall(ball);
+    }
+
+    handleGutterCollision(ball) {
+        this.addBark('Saved by the gutter!');
         this.removeBall(ball);
     }
 
@@ -852,14 +967,15 @@ export default class PachinkoScene extends Phaser.Scene {
         }
 
         const isEnsemble = this.activeCast.length === 3;
-        let bonus = (this.currentScore * 0.1) + ((this.ballsRemaining || 0) * 500);
+        let bonus = 5000 + (this.currentScore * 0.1);
         bonus *= this.directorModifiers.oscarBonusMult || 1;
         if (isEnsemble) {
             bonus *= 2;
         }
-        bonus = Math.floor(bonus);
+        bonus = Math.round(bonus);
 
         this.currentScore += bonus;
+        GameState.currentRun.score = this.currentScore;
         this.updateUI();
         
         // Trigger scanline reactive jitter for Oscar!
@@ -928,7 +1044,7 @@ export default class PachinkoScene extends Phaser.Scene {
         if (!this.sound.mute && this.cache.audio.exists('sfx_abandon')) {
             this.sound.play('sfx_abandon', { volume: 0.9 * (GameState.getAudioSettings(this).sfxVolume ?? 1) });
         }
-        this.scene.start('DirectorCutScene');
+        this.scene.start('DirectorCutScene', GameState.createRunRecap({ abandoned: true }));
     }
 
     addBark(textStr, anchor = null) {
@@ -965,7 +1081,7 @@ export default class PachinkoScene extends Phaser.Scene {
     }
 
     triggerAntiStuck(ball) {
-        ball.antiStuckTriggered = true;
+        ball.lastExplosionTime = this.time.now;
 
         if (!this.sound.mute && this.cache.audio.exists('sfx_explosion')) {
             this.sound.play('sfx_explosion', { volume: 0.9 * (GameState.getAudioSettings(this).sfxVolume ?? 1) });
@@ -995,21 +1111,27 @@ export default class PachinkoScene extends Phaser.Scene {
             return;
         }
 
-        // --- WIN CONDITION CHECK ---
         if (this.currentScore >= this.levelData.targetScore) {
-            this.handleLevelWin();
+            if (this.activeBalls.length === 0) {
+                this.handleLevelWin();
+            } else {
+                this.pendingRoundWin = true;
+            }
             return;
         }
 
         if (this.ballsRemaining <= 0 && this.activeBalls.length === 0) {
             this.isLevelActive = false;
-            this.time.delayedCall(1500, () => this.scene.start('GameOverScene', { win: false }));
+            this.time.delayedCall(1500, () => this.scene.start('DirectorCutScene', GameState.createRunRecap({ win: false })));
         }
     }
 
     handleLevelWin() {
         this.isLevelActive = false;
         this.levelTransitioning = true;
+        this.pendingRoundWin = false;
+        GameState.currentRun.lastRoundScore = this.currentScore;
+        GameState.currentRun.lastRating = Math.max(0, Math.round((this.currentScore / this.levelData.targetScore) * 10) / 10);
 
         // IMDb Ranking Connection
         const isDeepCut = GameState.currentRun.currentFilmIndex === 4;
@@ -1021,7 +1143,7 @@ export default class PachinkoScene extends Phaser.Scene {
             this.time.delayedCall(1500, () => {
                 const isFinalFilm = GameState.advanceFilm();
                 if (isFinalFilm) {
-                    this.scene.start('GameOverScene', { win: true });
+                    this.scene.start('DirectorCutScene', GameState.createRunRecap({ win: true }));
                 } else {
                     this.scene.start('ShopScene');
                 }
@@ -1070,7 +1192,7 @@ export default class PachinkoScene extends Phaser.Scene {
             onComplete: () => {
                 this.time.delayedCall(2500, () => {
                     GameState.advanceFilm();
-                    this.scene.start('GameOverScene', { win: true });
+                    this.scene.start('DirectorCutScene', GameState.createRunRecap({ win: true }));
                 });
             }
         });
@@ -1087,6 +1209,15 @@ export default class PachinkoScene extends Phaser.Scene {
             this.matter.body.setPosition(this.oscar.body, { x: this.oscar.visual.x, y: this.oscar.visual.y });
         }
 
+        this.rotatingBouncers.forEach((peg) => {
+            if (!peg?.visual || !peg?.position) {
+                return;
+            }
+            const nextAngle = (peg.angle || 0) + peg.rotationSpeed;
+            this.matter.body.setAngle(peg, nextAngle);
+            peg.visual.rotation = nextAngle;
+        });
+
         this.activeBalls.slice().forEach((ball) => {
             if (ball.visual) {
                 ball.visual.setPosition(ball.position.x, ball.position.y);
@@ -1096,7 +1227,7 @@ export default class PachinkoScene extends Phaser.Scene {
             const speed = Math.hypot(ball.velocity.x, ball.velocity.y);
             if (speed > 0.6) {
                 ball.lastMovingTime = time;
-            } else if (!ball.antiStuckTriggered && time - (ball.lastMovingTime || time) >= 2500) {
+            } else if (time - Math.max(ball.lastMovingTime || 0, ball.lastExplosionTime || 0) >= 2500) {
                 this.triggerAntiStuck(ball);
             }
 
@@ -1104,20 +1235,39 @@ export default class PachinkoScene extends Phaser.Scene {
                 this.removeBall(ball);
             }
         });
+
+        this.exposureDots = this.exposureDots.filter((dot) => {
+            if (dot.alpha <= 0.02) {
+                dot.destroy();
+                return false;
+            }
+            dot.setAlpha(dot.alpha * 0.985);
+            return true;
+        });
+
+        if (this.pendingRoundWin && this.activeBalls.length === 0) {
+            this.handleLevelWin();
+        }
     }
 
     configureLevelData() {
         this.levelData = this.rawFilmData
             ? TMDB.getLevelDataFromFilm(this.rawFilmData)
-            : { title: 'LOADING ERROR', targetScore: 5000, balls: 10, friction: 0.001, themeColor: 0x222222, releaseYear: 'N/A' };
+            : { title: 'LOADING ERROR', targetScore: 2000, balls: 10, friction: 0.001, themeColor: 0x222222, releaseYear: 'N/A' };
 
         const levelIndex = GameState.currentRun.currentFilmIndex;
-        this.levelData.targetScore = Math.round((this.levelData.targetScore + (levelIndex * 2500)) * (this.directorModifiers.targetScoreMult ?? 1));
+        this.levelData.targetScore = Math.round((2000 + (levelIndex * 900)) * (this.directorModifiers.targetScoreMult ?? 1));
         this.ballsRemaining = Math.max(
             1,
             this.levelData.balls + (this.directorModifiers.startingBalls || 0) - (GameState.draftingPenalty || 0)
         );
         this.pegRestitution = 0.8 + (this.directorModifiers.pegBounce || 0);
         this.pegFriction = (this.levelData.friction || 0.001) + (this.directorModifiers.pegFriction || 0);
+    }
+
+    spawnExposureDot(x, y) {
+        const dot = this.add.circle(x, y, 4, 0xff8c1a, 0.9).setDepth(3);
+        this.boardContainer.add(dot);
+        this.exposureDots.push(dot);
     }
 }

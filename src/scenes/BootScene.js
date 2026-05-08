@@ -17,13 +17,9 @@ export default class BootScene extends Phaser.Scene {
         loadBg.fillStyle(0x0d0a05, 1);
         loadBg.fillRect(0, 0, width, height);
 
-        const loadTitle = this.add.text(width / 2, height / 2 - 220, 'PA-KINO!', {
-            fontSize: '140px',
-            fontFamily: '"VT323", monospace',
-            color: '#ff8800',
-            stroke: '#000000',
-            strokeThickness: 10
-        }).setOrigin(0.5).setDepth(10);
+        const loadOverlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.38)
+            .setOrigin(0, 0)
+            .setDepth(9);
 
         // --- Progress bar ---
         const barW = Math.min(560, width - 80);
@@ -47,27 +43,18 @@ export default class BootScene extends Phaser.Scene {
         }).setOrigin(0.5, 0).setDepth(11);
         this.startTickerScroll(width);
 
-        // Collect transient loading UI — destroyed in create() once scene is built
-        this._loadUiGroup = [loadBg, loadTitle, barBg, this.loadBarFill, this.tickerText];
+        this.preloadFadeCurtain = this.add.rectangle(0, 0, width, height, 0x000000, 1)
+            .setOrigin(0, 0)
+            .setDepth(30);
+        this.tweens.add({
+            targets: this.preloadFadeCurtain,
+            alpha: 0,
+            duration: 800,
+            ease: 'Sine.easeOut'
+        });
 
-        // --- PLAY GAME button — disabled until loading completes ---
-        this.playBtn = UI.createChunkyButton(
-            this,
-            width / 2,
-            height / 2 - 60,
-            450,
-            110,
-            'PLAY GAME',
-            () => this.handleStartGame(),
-            null,
-            {
-                suppressAutoSfx: true,
-                beforeClick: () => this.handleUserGestureUnlock()
-            }
-        );
-        this.playBtn.setDepth(20);
-        this.playBtn.setAlpha(0.4);
-        this.playBtn.disableInteractive();
+        // Collect transient loading UI — destroyed in create() once scene is built
+        this._loadUiGroup = [loadBg, loadOverlay, barBg, this.loadBarFill, this.tickerText, this.preloadFadeCurtain];
 
         // --- Loader event listeners ---
         this.load.on('filecomplete-spritesheet-director_portraits', (key) => {
@@ -115,19 +102,6 @@ export default class BootScene extends Phaser.Scene {
                 this.tickerText.setColor('#ffcc00');
                 this.tickerText.setX(width / 2);
             }
-            // Unlock button with a pop animation
-            if (this.playBtn) {
-                this.playBtn.setAlpha(1.0);
-                this.playBtn.setInteractive();
-                this.tweens.add({
-                    targets: this.playBtn,
-                    scaleX: 1.1,
-                    scaleY: 1.1,
-                    duration: 280,
-                    yoyo: true,
-                    ease: 'Back.easeOut'
-                });
-            }
         });
 
         // --- Audio ---
@@ -161,7 +135,7 @@ export default class BootScene extends Phaser.Scene {
         this.createPlaceholderPortraitTexture();
         this.tickerTween?.stop();
 
-        // Destroy transient loading-screen graphics (the button persists)
+        // Destroy transient loading-screen graphics
         this._loadUiGroup?.forEach(obj => obj?.destroy());
         this._loadUiGroup = null;
         this.loadBarFill = null;
@@ -199,6 +173,14 @@ export default class BootScene extends Phaser.Scene {
         this.scene.launch('CabinetScene');
         this.scene.bringToTop('CabinetScene');
 
+        this.bootOverlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.38)
+            .setOrigin(0, 0)
+            .setDepth(60);
+
+        this.bootFadeCurtain = this.add.rectangle(0, 0, width, height, 0x000000, 1)
+            .setOrigin(0, 0)
+            .setDepth(95);
+
         this.add.particles(0, 0, 'dust_particle', {
             x: { min: 0, max: width },
             y: { min: 0, max: height },
@@ -211,50 +193,85 @@ export default class BootScene extends Phaser.Scene {
             quantity: 1,
             frequency: 100,
             blendMode: 'ADD'
-        });
+        }).setDepth(70);
 
         this.refreshScanlines();
 
-        // 4. Attach pulse tween and extended tap-target to the pre-created button
-        if (this.playBtn) {
-            const hitW = 510;
-            const hitH = 170;
-            this.playBtn.setInteractive(
-                new Phaser.Geom.Rectangle(-hitW / 2, -hitH / 2, hitW, hitH),
-                Phaser.Geom.Rectangle.Contains
-            );
+        this.playBtn = UI.createChunkyButton(
+            this,
+            width / 2,
+            height / 2 - 60,
+            450,
+            110,
+            'PLAY GAME',
+            () => this.handleStartGame(),
+            null,
+            {
+                suppressAutoSfx: true,
+                beforeClick: () => this.handleUserGestureUnlock()
+            }
+        );
+        this.playBtn.setDepth(90);
+        this.playBtn.setAlpha(0);
+        this.playBtn.hitTarget.input.enabled = false;
 
-            this.pulseTween = this.tweens.add({
+        this.pulseTween = this.tweens.add({
+            targets: this.playBtn,
+            scaleX: 1.05,
+            scaleY: 1.05,
+            duration: 800,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+        this.pulseTween.pause();
+
+        this.playBtn.on('pointerover', () => {
+            this.pulseTween?.pause();
+            this.tweens.add({
                 targets: this.playBtn,
-                scaleX: 1.05,
-                scaleY: 1.05,
-                duration: 800,
-                yoyo: true,
-                repeat: -1,
-                ease: 'Sine.easeInOut'
+                scaleX: 1.1,
+                scaleY: 1.1,
+                duration: 200,
+                ease: 'Back.easeOut'
             });
+        });
 
-            this.playBtn.on('pointerover', () => {
-                this.pulseTween?.pause();
-                this.tweens.add({
-                    targets: this.playBtn,
-                    scaleX: 1.1,
-                    scaleY: 1.1,
-                    duration: 200,
-                    ease: 'Back.easeOut'
-                });
+        this.playBtn.on('pointerout', () => {
+            this.tweens.add({
+                targets: this.playBtn,
+                scaleX: 1.0,
+                scaleY: 1.0,
+                duration: 200,
+                onComplete: () => this.pulseTween?.resume()
             });
+        });
 
-            this.playBtn.on('pointerout', () => {
-                this.tweens.add({
-                    targets: this.playBtn,
-                    scaleX: 1.0,
-                    scaleY: 1.0,
-                    duration: 200,
-                    onComplete: () => this.pulseTween?.resume()
-                });
+        this.tweens.add({
+            targets: this.bootFadeCurtain,
+            alpha: 0,
+            duration: 900,
+            ease: 'Sine.easeOut',
+            onComplete: () => {
+                this.bootFadeCurtain.destroy();
+                this.bootFadeCurtain = null;
+            }
+        });
+
+        this.time.delayedCall(900, () => {
+            this.tweens.add({
+                targets: this.playBtn,
+                alpha: 1,
+                duration: 450,
+                ease: 'Sine.easeOut',
+                onStart: () => {
+                    this.playBtn.hitTarget.input.enabled = true;
+                },
+                onComplete: () => {
+                    this.pulseTween?.resume();
+                }
             });
-        }
+        });
     }
 
     handleUserGestureUnlock() {
@@ -291,9 +308,7 @@ export default class BootScene extends Phaser.Scene {
 
         // Both calls execute in the same pointerdown block to satisfy
         // autoplay/fullscreen policy before scene transition begins.
-        if (this.scale.fullscreenSupported && !this.scale.isFullscreen) {
-            this.scale.startFullscreen();
-        }
+        UI.enterImmersiveFullscreen(this);
 
         if (this.sound.context) {
             this.sound.context.resume()
@@ -337,14 +352,7 @@ export default class BootScene extends Phaser.Scene {
             return;
         }
 
-        this.tickerText.setX(width + 220);
-        this.tickerTween = this.tweens.add({
-            targets: this.tickerText,
-            x: -220,
-            duration: 2400,
-            repeat: -1,
-            ease: 'Linear'
-        });
+        this.tickerText.setX(width / 2);
     }
 
     restartTickerScroll(width) {
@@ -352,7 +360,6 @@ export default class BootScene extends Phaser.Scene {
             return;
         }
 
-        this.tickerTween?.stop();
         this.startTickerScroll(width);
     }
 

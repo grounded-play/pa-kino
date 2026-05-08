@@ -20,6 +20,8 @@ export default class DirectorSelectScene extends Phaser.Scene {
 
         // Background Sync
         this.bgScene = this.scene.get('BackgroundScene');
+        this.bgScene?.setBgWheelVisible(true);
+        this.bgScene?.updateWheelLayout(width / 2, this.wheelCenterY, this.wheelRadius);
         this.bgScene?.setWheelVortex(width / 2, this.wheelCenterY, this.wheelRadius, 0);
 
         // Background Dimming (Bottom layer)
@@ -38,6 +40,13 @@ export default class DirectorSelectScene extends Phaser.Scene {
             color: '#ffffff',
             shadow: { offsetX: 3, offsetY: 3, color: '#000', fill: true }
         }).setOrigin(0.5);
+        this.milestonesText = this.add.text(width / 2, margin + 140, `PRODUCTION MILESTONES: ${GameState.getTotalMilestones()}/50`, {
+            fontSize: '30px',
+            fontFamily: '"VT323", monospace',
+            color: '#66f2ff',
+            stroke: '#003344',
+            strokeThickness: 4
+        }).setOrigin(0.5);
 
         // Status Panel (Positioned below the wheel)
         const panelY = this.wheelCenterY + this.wheelRadius + 30;
@@ -53,14 +62,14 @@ export default class DirectorSelectScene extends Phaser.Scene {
             align: 'center'
         }).setOrigin(0.5);
         
-        this.penaltyText = this.add.text(width / 2, panelY + 115, 'Total Re-Roll Penalty: -0 Balls', {
-            fontSize: '26px',
+        this.penaltyText = this.add.text(width / 2, panelY + 115, 'STARTING BALLS: 10 BASE + 0 DIRECTOR - 0 RE-ROLL = 10', {
+            fontSize: '24px',
             fontFamily: '"VT323", monospace',
-            color: '#ff4444', // Hard red for penalty awareness
+            color: '#66f2ff',
             align: 'center'
         }).setOrigin(0.5);
 
-        this.uiContainer.add([title, this.statusText, this.penaltyText]);
+        this.uiContainer.add([title, this.milestonesText, this.statusText, this.penaltyText]);
         this.refreshPenaltyText();
         this.createAudioToggle(width, height);
 
@@ -85,6 +94,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
         // Add director names and portraits to wheel
         this.directors.forEach((dir, i) => {
             const angle = this.pointerAngle + (i * this.sliceAngle);
+            const milestoneCount = GameState.getDirectorMilestoneCount(dir.name);
             
             // Draw segment divider line (centered between names)
             const dividerAngle = angle - (this.sliceAngle / 2);
@@ -105,6 +115,10 @@ export default class DirectorSelectScene extends Phaser.Scene {
                 const wheelSprite = this.add.sprite(portraitX, portraitY, 'director_portraits', safeFrame);
                 wheelSprite.setDisplaySize(96, 96);
                 wheelSprite.rotation = angle + Math.PI / 2;
+                if (milestoneCount === 0) {
+                    wheelSprite.setTint(0x666666);
+                    wheelSprite.setAlpha(0.65);
+                }
                 this.wheelContainer.add(wheelSprite);
             } else {
                 const fallback = this.add.graphics();
@@ -113,20 +127,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
                 this.wheelContainer.add(fallback);
             }
 
-            // 2. Name Text (Closer to center)
-            const x = Math.cos(angle) * 110;
-            const y = Math.sin(angle) * 110;
-            
-            const txt = this.add.text(x, y, dir.name.split(' ').pop().toUpperCase(), {
-                fontSize: '24px',
-                fontFamily: '"VT323", monospace',
-                color: '#fff',
-                align: 'center',
-                stroke: '#000',
-                strokeThickness: 2
-            }).setOrigin(0.5);
-            txt.rotation = angle + Math.PI / 2; // Orient text with slices
-            this.wheelContainer.add(txt);
+            this.drawWheelProgressDots(angle, milestoneCount, dir.name.split(' ').pop().toUpperCase());
         });
 
         this.uiContainer.add(this.wheelContainer);
@@ -137,18 +138,18 @@ export default class DirectorSelectScene extends Phaser.Scene {
 
         this.uiGroup = this.add.container(0, 0);
 
-        this.dossierContainer = this.add.container(width / 2, margin + (safeHeight * 0.65)).setDepth(20).setVisible(false);
-        this.resultBackdrop = this.add.rectangle(0, 0, safeWidth, 400, 0x1a1a1a, 0.94).setStrokeStyle(4, 0xffaa00);
+        this.dossierContainer = this.add.container(width / 2, margin + (safeHeight * 0.68)).setDepth(20).setVisible(false);
+        this.resultBackdrop = this.add.rectangle(0, 0, safeWidth, 470, 0x1a1a1a, 0.94).setStrokeStyle(4, 0xffaa00);
         this.resultBackdrop.setScale(1.0);
 
-        this.avatarContainer = this.add.container(-350, -16);
+        this.avatarContainer = this.add.container(-300, 28);
         this.directorPortrait = null;
         this.placeholderPortrait = this.add.image(0, -8, 'placeholder_box');
         this.placeholderPortrait.setDisplaySize(190, 190);
         this.placeholderPortrait.setVisible(false);
         this.avatarContainer.add(this.placeholderPortrait);
 
-        this.dossierTextContainer = this.add.container(100, -100);
+        this.dossierTextContainer = this.add.container(100, -78);
         this.directorNameTextLarge = this.add.text(0, -110, '', {
             fontSize: '68px',
             fontFamily: '"VT323", monospace',
@@ -157,40 +158,42 @@ export default class DirectorSelectScene extends Phaser.Scene {
             strokeThickness: 6
         }).setOrigin(0.5, 0);
 
-        this.traitBox = this.add.rectangle(0, -4, 520, 96, 0x101010, 0.95).setStrokeStyle(4, 0xffaa00);
-        this.traitText = this.add.text(0, -4, '', {
-            fontSize: '30px',
+        this.traitBox = this.add.rectangle(0, -18, 360, 56, 0x101010, 0.95).setStrokeStyle(4, 0xffaa00);
+        this.traitText = this.add.text(0, -18, '', {
+            fontSize: '24px',
             fontFamily: '"VT323", monospace',
             color: '#ffdd99',
             align: 'center',
-            wordWrap: { width: 470 }
+            wordWrap: { width: 320 }
         }).setOrigin(0.5);
 
-        this.birthText = this.add.text(0, 88, '', {
-            fontSize: '24px',
+        this.birthText = this.add.text(0, 30, '', {
+            fontSize: '20px',
             fontFamily: '"VT323", monospace',
             color: '#ffffff',
             align: 'center',
-            wordWrap: { width: 520 }
+            wordWrap: { width: 500 }
         }).setOrigin(0.5);
 
-        this.bioSnippetText = this.add.text(0, 180, '', {
-            fontSize: '24px',
+        this.bioSnippetText = this.add.text(0, 78, '', {
+            fontSize: '20px',
             fontFamily: '"VT323", monospace',
             color: '#ffdd99',
             align: 'center',
-            wordWrap: { width: 540 },
-            lineSpacing: 6
+            wordWrap: { width: 500 },
+            lineSpacing: 4
         }).setOrigin(0.5);
+        this.roadmapContainer = this.add.container(0, 120);
         this.dossierTextContainer.add([
             this.directorNameTextLarge,
             this.traitBox,
             this.traitText,
             this.birthText,
-            this.bioSnippetText
+            this.bioSnippetText,
+            this.roadmapContainer
         ]);
 
-        this.startRunButton = UI.createChunkyButton(this, width / 2 + 180, margin + safeHeight - 160, 320, 96, 'START PRODUCTION', () => {
+        this.startRunButton = UI.createChunkyButton(this, width / 2 + 180, margin + safeHeight - 210, 320, 96, 'START PRODUCTION', () => {
             this.beginRun();
         }, 'GO TO THE THEATER');
         
@@ -205,11 +208,12 @@ export default class DirectorSelectScene extends Phaser.Scene {
             ease: 'Sine.easeInOut'
         });
 
-        this.rerollButton = UI.createChunkyButton(this, width / 2 - 180, margin + safeHeight - 160, 260, 80, 'RE-ROLL', () => {
+        this.rerollButton = UI.createChunkyButton(this, width / 2 - 180, margin + safeHeight - 210, 260, 80, 'RE-ROLL', () => {
             this.handleReroll();
         }, '(-1 BALL PENALTY)');
         this.startRunButton.setAlpha(0);
         this.rerollButton.setAlpha(0);
+        this.setActionButtonsEnabled(false);
 
         this.dossierContainer.add([
             this.resultBackdrop,
@@ -223,7 +227,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
         // Spin Button logic (clicking the wheel)
         this.wheelGraphic.on('pointerdown', () => this.spinWheel());
 
-        const backBtnContainer = UI.createChunkyButton(this, width / 2, margin + safeHeight - 60, 300, 60, '< BACK TO MENU', () => {
+        const backBtnContainer = UI.createChunkyButton(this, width / 2, margin + safeHeight - 104, 300, 60, '< BACK TO MENU', () => {
             GameState.draftingPenalty = 0; // Reset penalty when leaving
             this.scene.start('MenuScene');
         });
@@ -241,6 +245,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
         if (!this.isSpinning && !this.wheelLocked) {
             // Slow idle rotation
             this.wheelContainer.rotation += 0.005;
+            this.bgScene?.syncBgWheel(this.wheelContainer.rotation);
         }
     }
 
@@ -261,7 +266,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
         const spins = Phaser.Math.Between(5, 8);
         const targetIndex = Phaser.Math.Between(0, this.directors.length - 1);
         
-        const targetAngleRad = this.pointerAngle - (targetIndex * this.sliceAngle);
+        const targetAngleRad = -(targetIndex * this.sliceAngle);
         const totalRotation = (Math.PI * 2 * spins) + targetAngleRad;
 
         this.tweens.add({
@@ -282,7 +287,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
     }
 
     getNeedleSliceIndex(rotation) {
-        const selectionAngle = Phaser.Math.Angle.Normalize(this.pointerAngle - rotation);
+        const selectionAngle = Phaser.Math.Angle.Normalize(-rotation);
         return (((Math.round(selectionAngle / this.sliceAngle) % this.directors.length) + this.directors.length) % this.directors.length);
     }
 
@@ -335,7 +340,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
         this.wheelLocked = true;
 
         // Snap-to-Center
-        const finalRotation = this.pointerAngle - (index * this.sliceAngle);
+        const finalRotation = -(index * this.sliceAngle);
         this.tweens.add({
             targets: this.wheelContainer,
             rotation: finalRotation,
@@ -359,7 +364,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
             }
 
             const [profileData, films] = await Promise.all([
-                TMDB.getDirectorProfile(selectedDirector.tmdbId ?? selectedDirector.id),
+                TMDB.getDirectorProfile(selectedDirector.tmdbId ?? selectedDirector.id, selectedDirector.name),
                 TMDB.getDirectorFilms(selectedDirector.tmdbId ?? selectedDirector.id, selectedDirector.name)
             ]);
 
@@ -368,9 +373,8 @@ export default class DirectorSelectScene extends Phaser.Scene {
             }
 
             // PRE-FETCH POSTERS FOR THE CAMPAIGN
-            const progress = GameState.persistentStats.directorProgress[selectedDirector.name] || 0;
-            const currentMovie = films[progress];
-            const nextMovie = films[progress + 1];
+            const currentMovie = films[0];
+            const nextMovie = films[1];
 
             const currentKey = `poster_${currentMovie.id}`;
             const nextKey = nextMovie ? `poster_${nextMovie.id}` : null;
@@ -400,6 +404,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
 
                 this.wheelLocked = true;
                 this.statusText.setText(`SELECTED: ${selectedDirector.name}\nLOCKED IN. START OR RE-ROLL.`);
+                this.refreshPenaltyText(this.pendingSelection);
                 this.showDirectorReveal(this.pendingSelection);
                 this.isSpinning = false;
             };
@@ -418,6 +423,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
             this.pendingSelection = fallbackSelection;
             this.wheelLocked = true;
             this.statusText.setText(`TMDB OFFLINE MODE\n${fallbackSelection.name} STEPS IN.`);
+            this.refreshPenaltyText(this.pendingSelection);
             this.showDirectorReveal(fallbackSelection);
             this.isSpinning = false;
         }
@@ -435,11 +441,14 @@ export default class DirectorSelectScene extends Phaser.Scene {
         this.traitBox.setAlpha(0);
         this.birthText.setAlpha(0);
         this.bioSnippetText.setAlpha(0);
+        this.roadmapContainer.setAlpha(0);
         this.startRunButton.setAlpha(0);
         this.rerollButton.setAlpha(0);
+        this.setActionButtonsEnabled(true);
 
         this.updateDirectorPortrait(selection);
         this.populateBioPanel(selection);
+        this.renderRoadmap(selection);
 
         this.tweens.add({
             targets: this.resultBackdrop,
@@ -458,7 +467,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
         });
 
         this.tweens.add({
-            targets: [this.traitBox, this.traitText, this.birthText, this.bioSnippetText],
+            targets: [this.traitBox, this.traitText, this.birthText, this.bioSnippetText, this.roadmapContainer],
             alpha: 1,
             duration: 260,
             delay: 100,
@@ -587,14 +596,35 @@ export default class DirectorSelectScene extends Phaser.Scene {
         this.pendingSelection = null;
         this.wheelLocked = false;
         this.dossierContainer.setVisible(false);
+        this.startRunButton.setAlpha(0);
+        this.rerollButton.setAlpha(0);
+        this.setActionButtonsEnabled(false);
         this.wheelContainer.rotation = 0;
         this.lastRotation = 0;
+        this.selectedSliceIndex = null;
         this.statusText.setText('RE-ROLL PAID. TAP WHEEL TO SPIN AGAIN.');
         this.refreshPenaltyText();
     }
 
-    refreshPenaltyText() {
-        this.penaltyText.setText(`Total Re-Roll Penalty: -${GameState.draftingPenalty} Balls`);
+    refreshPenaltyText(selection = null) {
+        const firstFilm = selection?.films?.[0];
+        const levelData = firstFilm ? TMDB.getLevelDataFromFilm(firstFilm) : { balls: 10 };
+        const directorBonus = selection?.traits?.startingBalls || 0;
+        const rerollPenalty = GameState.draftingPenalty || 0;
+        const totalBalls = Math.max(1, levelData.balls + directorBonus - rerollPenalty);
+        const detailParts = [];
+
+        if (directorBonus !== 0) {
+            const signedDirectorBonus = directorBonus > 0 ? `+${directorBonus}` : `${directorBonus}`;
+            detailParts.push(`${signedDirectorBonus} director trait`);
+        }
+
+        if (rerollPenalty > 0) {
+            detailParts.push(`-${rerollPenalty} re-roll`);
+        }
+
+        const detailSuffix = detailParts.length > 0 ? ` (${detailParts.join(', ')})` : '';
+        this.penaltyText.setText(`STARTING BALLS: ${totalBalls}${detailSuffix}`);
     }
 
     beginRun() {
@@ -616,6 +646,112 @@ export default class DirectorSelectScene extends Phaser.Scene {
         this.uiContainer.add(this.settingsBtn);
     }
 
+    drawWheelProgressDots(angle, milestoneCount, labelText) {
+        const rowRadius = 258;
+        const rowWidth = 72;
+        const dotSpacing = 18;
+        const rowCenterX = Math.cos(angle) * rowRadius;
+        const rowCenterY = Math.sin(angle) * rowRadius;
+        const infoGroup = this.add.container(rowCenterX, rowCenterY);
+        infoGroup.rotation = angle + (Math.PI / 2);
+
+        const nameText = this.add.text(0, -18, labelText, {
+            fontSize: '18px',
+            fontFamily: '"VT323", monospace',
+            color: milestoneCount > 0 ? '#fff0a8' : '#cccccc',
+            stroke: '#000',
+            strokeThickness: 2,
+            align: 'center'
+        }).setOrigin(0.5);
+        infoGroup.add(nameText);
+
+        for (let dotIndex = 0; dotIndex < 5; dotIndex++) {
+            const unlocked = dotIndex < milestoneCount;
+            const x = -rowWidth / 2 + (dotIndex * dotSpacing);
+            const dot = this.add.circle(x, 8, 7, unlocked ? 0xffe066 : 0x4a4a4a)
+                .setStrokeStyle(3, unlocked ? 0xff8800 : 0x777777);
+            infoGroup.add(dot);
+        }
+
+        this.wheelContainer.add(infoGroup);
+    }
+
+    renderRoadmap(selection) {
+        this.roadmapContainer.removeAll(true);
+        const title = this.add.text(0, 0, 'CAREER ROADMAP', {
+            fontSize: '24px',
+            fontFamily: '"VT323", monospace',
+            color: '#66f2ff'
+        }).setOrigin(0.5, 0);
+        this.roadmapContainer.add(title);
+
+        const unlockedFilms = GameState.getGalleryFilmsForDirector(selection.name);
+        const unlockedIds = new Set(unlockedFilms.map((film) => film.id));
+        (selection.films || []).slice(0, 5).forEach((film, index) => {
+            const unlocked = unlockedIds.has(film.id);
+            const x = -200 + (index * 100);
+            const card = this.add.container(x, 62);
+            const box = this.add.rectangle(0, 0, 92, 92, unlocked ? 0x2a1a08 : 0x1e1e1e, 0.96)
+                .setStrokeStyle(3, unlocked ? 0xffaa00 : 0x555555);
+            const leftDot = this.add.circle(0, -30, 7, unlocked ? 0xffe066 : 0x555555)
+                .setStrokeStyle(2, unlocked ? 0xff8800 : 0x333333);
+            const stepLabel = this.add.text(0, -10, `${index + 1}`, {
+                fontSize: '18px',
+                fontFamily: '"VT323", monospace',
+                color: '#ffffff'
+            }).setOrigin(0.5);
+
+            const unlockedFilmData = unlockedFilms.find((entry) => entry.id === film.id);
+            const posterPath = unlockedFilmData?.posterPath
+                || unlockedFilmData?.poster_path
+                || film.posterPath
+                || (film.poster_path ? `https://image.tmdb.org/t/p/w500${film.poster_path}` : null);
+
+            if (unlocked && posterPath) {
+                const textureKey = `roadmap_poster_${film.id}`;
+
+                if (!this.textures.exists(textureKey) && !this.pendingRoadmapPosterLoads?.has(textureKey)) {
+                    this.pendingRoadmapPosterLoads ||= new Set();
+                    this.pendingRoadmapPosterLoads.add(textureKey);
+                    this.load.image(textureKey, posterPath);
+                    this.load.once('complete', () => {
+                        this.pendingRoadmapPosterLoads?.delete(textureKey);
+                        if (this.pendingSelection?.name === selection.name) {
+                            this.renderRoadmap(selection);
+                        }
+                    });
+                    this.load.start();
+                }
+
+                if (this.textures.exists(textureKey)) {
+                    const poster = this.add.image(0, 6, textureKey).setOrigin(0.5);
+                    const scale = Math.min(62 / poster.width, 58 / poster.height);
+                    poster.setScale(scale);
+                    card.add([box, poster, leftDot, stepLabel]);
+                } else {
+                    const loadingLabel = this.add.text(0, 18, 'LOADING', {
+                        fontSize: '14px',
+                        fontFamily: '"VT323", monospace',
+                        color: '#fff4cc',
+                        align: 'center'
+                    }).setOrigin(0.5);
+                    card.add([box, leftDot, stepLabel, loadingLabel]);
+                }
+            } else {
+                const label = this.add.text(0, 18, unlocked ? film.title.toUpperCase() : 'LOCKED', {
+                    fontSize: unlocked ? '14px' : '16px',
+                    fontFamily: '"VT323", monospace',
+                    color: unlocked ? '#fff4cc' : '#888888',
+                    align: 'center',
+                    wordWrap: { width: 76 }
+                }).setOrigin(0.5);
+                card.add([box, leftDot, stepLabel, label]);
+            }
+
+            this.roadmapContainer.add(card);
+        });
+    }
+
     drawPortraitPlaceholder(w, h, color = 0x7a7a7a) {
         if (!this.placeholderPortrait) {
             this.placeholderPortrait = this.add.image(0, -8, 'placeholder_box');
@@ -627,5 +763,17 @@ export default class DirectorSelectScene extends Phaser.Scene {
         this.placeholderPortrait.setAlpha(1);
         this.placeholderPortrait.setScale(0);
         this.directorPortrait?.setVisible(false);
+    }
+
+    setActionButtonsEnabled(enabled) {
+        const updateTarget = (button) => {
+            const hitTarget = button?.hitTarget || button;
+            if (hitTarget?.input) {
+                hitTarget.input.enabled = enabled;
+            }
+        };
+
+        updateTarget(this.startRunButton);
+        updateTarget(this.rerollButton);
     }
 }

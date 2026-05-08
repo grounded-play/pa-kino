@@ -8,22 +8,28 @@ export const UI = {
      * @param {Function} onClick - Callback
      */
     makeSquishyButton(scene, element, onClick, options = {}) {
-        let interactiveTarget = element;
+        let interactiveTarget = options.hitTarget || element.hitTarget || element;
 
         if (element.type === 'Container') {
             // Ensure the container has bounds if it doesn't already
-            if (element.width === 0 || element.height === 0) {
+            if (interactiveTarget !== element) {
+                // Dedicated hit targets are already configured.
+            } else if (element.width === 0 || element.height === 0) {
                 // We assume the first child dictates the bounds if not set
                 if (element.list.length > 0) {
                     interactiveTarget = element.list[0];
                 }
-            } else {
+            } else if (!element.hitTarget) {
                 // If it HAS bounds set by setSize, use the container itself
                 interactiveTarget = element;
             }
         }
 
-        interactiveTarget.setInteractive({ useHandCursor: true });
+        if (!interactiveTarget.input) {
+            interactiveTarget.setInteractive({ useHandCursor: true });
+        } else {
+            interactiveTarget.input.cursor = 'pointer';
+        }
 
         // Original scale could be different from 1 if it's a container, but we assume 1 for simplicity here.
         // We'll capture base scale.
@@ -147,15 +153,74 @@ export const UI = {
             container.add(subText);
         }
 
-        // Explicitly set size for interaction
+        const hitPaddingX = options.hitPaddingX ?? 28;
+        const hitPaddingY = options.hitPaddingY ?? 24;
+        const hitWidth = width + hitPaddingX;
+        const hitHeight = height + 8 + hitPaddingY;
+
+        const hitTarget = scene.add.rectangle(x, y + 4, hitWidth, hitHeight, 0xffffff, 0.001);
+        hitTarget.setDepth((container.depth || 0) + 1);
+        hitTarget.setInteractive(
+            new Phaser.Geom.Rectangle(
+                -hitWidth / 2,
+                -hitHeight / 2,
+                hitWidth,
+                hitHeight
+            ),
+            Phaser.Geom.Rectangle.Contains
+        );
+        hitTarget.input.cursor = 'pointer';
+
+        const syncHitTarget = () => {
+            hitTarget.setPosition(container.x, container.y + 4);
+            hitTarget.setDepth((container.depth || 0) + 1);
+        };
+
+        syncHitTarget();
+        scene.events.on('postupdate', syncHitTarget);
+        container.once('destroy', () => {
+            scene.events.off('postupdate', syncHitTarget);
+            hitTarget.destroy();
+        });
+
+        // Explicitly set size for layout/physics
         container.setSize(width, height + 8);
-        container.setInteractive(new Phaser.Geom.Rectangle(-width / 2, -height / 2, width, height + 8), Phaser.Geom.Rectangle.Contains);
+        container.hitTarget = hitTarget;
 
         if (onClick) {
-            this.makeSquishyButton(scene, container, onClick, options);
+            this.makeSquishyButton(scene, container, onClick, { ...options, hitTarget });
         }
 
         return container;
+    },
+
+    enterImmersiveFullscreen(scene) {
+        if (!scene || scene.scale?.isFullscreen) {
+            return;
+        }
+
+        const fullscreenTarget =
+            scene.scale?.fullscreenTarget
+            || document.getElementById('game-container')
+            || scene.game?.canvas?.parentElement
+            || scene.game?.canvas;
+
+        const requestFullscreen =
+            fullscreenTarget?.requestFullscreen?.bind(fullscreenTarget) ||
+            document.documentElement?.requestFullscreen?.bind(document.documentElement);
+
+        if (requestFullscreen) {
+            requestFullscreen({ navigationUI: 'hide' }).catch(() => {
+                if (scene.scale?.fullscreenSupported && !scene.scale.isFullscreen) {
+                    scene.scale.startFullscreen();
+                }
+            });
+            return;
+        }
+
+        if (scene.scale?.fullscreenSupported && !scene.scale.isFullscreen) {
+            scene.scale.startFullscreen();
+        }
     },
 
     /**
@@ -227,7 +292,7 @@ export const UI = {
 
         const bg = scene.add.rectangle(0, 0, width * 2, height * 2, 0x000000, 0.85).setInteractive();
         const panelWidth = 440;
-        const panelHeight = options.showAbandon ? 730 : 630;
+        const panelHeight = options.showAbandon ? 810 : 710;
         const panel = scene.add.rectangle(0, 0, panelWidth, panelHeight, 0x1a1a1a).setStrokeStyle(4, 0xffaa00);
 
         const title = scene.add.text(0, -panelHeight / 2 + 40, 'PRODUCTION SETTINGS', {
@@ -298,6 +363,59 @@ export const UI = {
                 applyScanlineSetting(nextValue);
             }
         );
+
+        const fullscreenLabel = scene.add.text(-sliderWidth / 2, startY + 360, 'FULLSCREEN', {
+            fontSize: '20px',
+            fontFamily: '"VT323", monospace',
+            color: '#aaa'
+        });
+
+        const fullscreenSupported = scene.scale?.fullscreenSupported
+            || !!document.getElementById('game-container')?.requestFullscreen
+            || !!document.documentElement?.requestFullscreen;
+
+        const getFullscreenLabel = () => {
+            if (!fullscreenSupported) {
+                return 'N/A';
+            }
+
+            return scene.scale?.isFullscreen ? 'ON' : 'OFF';
+        };
+
+        const fullscreenBtn = this.createChunkyButton(
+            scene,
+            70,
+            startY + 380,
+            150,
+            50,
+            getFullscreenLabel(),
+            () => {
+                if (!fullscreenSupported) {
+                    return;
+                }
+
+                if (scene.scale?.isFullscreen) {
+                    scene.scale.stopFullscreen();
+                } else {
+                    this.enterImmersiveFullscreen(scene);
+                }
+
+                scene.time.delayedCall(50, () => {
+                    if (fullscreenBtn.list?.[1]) {
+                        fullscreenBtn.list[1].setText(getFullscreenLabel());
+                    }
+                });
+            }
+        );
+
+        const updateFullscreenButtonText = () => {
+            if (fullscreenBtn.list?.[1]) {
+                fullscreenBtn.list[1].setText(getFullscreenLabel());
+            }
+        };
+
+        scene.scale?.on?.('enterfullscreen', updateFullscreenButtonText);
+        scene.scale?.on?.('leavefullscreen', updateFullscreenButtonText);
 
         const collectDescendants = (gameObject, out = new Set()) => {
             out.add(gameObject);
@@ -387,7 +505,19 @@ export const UI = {
             if (options.onClose) options.onClose();
         });
 
-        container.add([bg, panel, title, ...masterElements, ...musicElements, ...sfxElements, scanlinesLabel, scanlinesBtn, closeBtn]);
+        container.add([
+            bg,
+            panel,
+            title,
+            ...masterElements,
+            ...musicElements,
+            ...sfxElements,
+            scanlinesLabel,
+            scanlinesBtn,
+            fullscreenLabel,
+            fullscreenBtn,
+            closeBtn
+        ]);
 
         if (options.showAbandon) {
             const abandonBtn = this.createChunkyButton(scene, 0, panelHeight / 2 - 170, 300, 60, 'ABANDON RUN', () => {

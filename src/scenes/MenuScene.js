@@ -17,16 +17,28 @@ export default class MenuScene extends Phaser.Scene {
 
     create() {
         const { width, height } = this.scale;
+        const margin = 40;
+        const safeHeight = height - (margin * 2);
+        this.hasMenuImpact = false;
+        this.menuIntroStarted = false;
+        this.menuButtonsRevealed = false;
+        this.titlePulseStarted = false;
+        this.memoryOpen = false;
+
+        GameState.resetCurrentRun();
         this.bgScene = this.scene.get('BackgroundScene');
         if (!this.bgScene || !this.bgScene.scene.isActive()) {
             this.scene.launch('BackgroundScene');
             this.bgScene = this.scene.get('BackgroundScene');
         }
+        this.bgScene?.setBgWheelVisible(false);
+        this.bgScene?.setWheelVortex(width / 2, margin + (safeHeight * 0.3), 300, 0);
+        this.bgScene?.syncBgWheel(0);
 
         this.cleanupPersistentMenuBodies();
+        this.cleanupMenuWorldBodies();
 
         GameState.applyAudioSettings(this);
-        this.hasMenuImpact = false;
 
         this.add.rectangle(0, 0, width, height, 0x000000, 0.38).setOrigin(0, 0).setDepth(60);
 
@@ -72,12 +84,10 @@ export default class MenuScene extends Phaser.Scene {
         this.createAudioSettings(width, height);
 
         this.startBtnContainer = UI.createChunkyButton(this, width / 2, -220, 340, 92, 'NEW RUN', () => {
-            if (this.scale.fullscreenSupported && !this.scale.isFullscreen) {
-                this.scale.startFullscreen();
-            }
+            UI.enterImmersiveFullscreen(this);
             this.scene.start('DirectorSelectScene');
         });
-        this.memoryBtnContainer = UI.createChunkyButton(this, width / 2, -360, 280, 76, 'RUN MEMORY', () => {
+        this.memoryBtnContainer = UI.createChunkyButton(this, width / 2, -360, 300, 76, 'REEL ARCHIVE', () => {
             this.toggleRunMemory(width, height);
         });
 
@@ -123,6 +133,28 @@ export default class MenuScene extends Phaser.Scene {
                 this.bgScene.matter.world.remove(body);
             }
         });
+    }
+
+    cleanupMenuWorldBodies() {
+        if (this.startButtonBody) {
+            this.matter.world.remove(this.startButtonBody);
+            this.startButtonBody = null;
+        }
+
+        if (this.memoryButtonBody) {
+            this.matter.world.remove(this.memoryButtonBody);
+            this.memoryButtonBody = null;
+        }
+
+        if (this.startButtonSpacer) {
+            this.matter.world.remove(this.startButtonSpacer);
+            this.startButtonSpacer = null;
+        }
+
+        if (this.memoryButtonSpacer) {
+            this.matter.world.remove(this.memoryButtonSpacer);
+            this.memoryButtonSpacer = null;
+        }
     }
 
     createMenuBounds(width, height) {
@@ -254,7 +286,6 @@ export default class MenuScene extends Phaser.Scene {
                 });
             }
         }
-
     }
 
     revealMenuButtons(height) {
@@ -288,9 +319,10 @@ export default class MenuScene extends Phaser.Scene {
     createButtonPhysicsBodies(height) {
         const startY = height * 0.66;
         const memoryY = height * 0.66 + 110;
+        const centerX = this.scale.width / 2;
 
         if (!this.startButtonBody) {
-            this.startButtonBody = this.matter.add.rectangle(this.scale.width / 2, startY, 340, 92, {
+            this.startButtonBody = this.matter.add.rectangle(centerX, startY, 340, 92, {
                 isStatic: true,
                 restitution: 0.95,
                 friction: 0,
@@ -298,11 +330,11 @@ export default class MenuScene extends Phaser.Scene {
                 label: 'menu_button'
             });
         } else {
-            this.matter.body.setPosition(this.startButtonBody, { x: this.scale.width / 2, y: startY });
+            this.matter.body.setPosition(this.startButtonBody, { x: centerX, y: startY });
         }
 
         if (!this.memoryButtonBody) {
-            this.memoryButtonBody = this.matter.add.rectangle(this.scale.width / 2, memoryY, 280, 76, {
+            this.memoryButtonBody = this.matter.add.rectangle(centerX, memoryY, 280, 76, {
                 isStatic: true,
                 restitution: 0.95,
                 friction: 0,
@@ -310,13 +342,41 @@ export default class MenuScene extends Phaser.Scene {
                 label: 'menu_button'
             });
         } else {
-            this.matter.body.setPosition(this.memoryButtonBody, { x: this.scale.width / 2, y: memoryY });
+            this.matter.body.setPosition(this.memoryButtonBody, { x: centerX, y: memoryY });
+        }
+
+        if (!this.startButtonSpacer) {
+            this.startButtonSpacer = this.matter.add.rectangle(centerX, startY + 56, 430, 14, {
+                isStatic: true,
+                restitution: 0.98,
+                friction: 0,
+                frictionStatic: 0,
+                label: 'menu_button_spacer',
+                render: { visible: false }
+            });
+        } else {
+            this.matter.body.setPosition(this.startButtonSpacer, { x: centerX, y: startY + 56 });
+        }
+
+        if (!this.memoryButtonSpacer) {
+            this.memoryButtonSpacer = this.matter.add.rectangle(centerX, memoryY - 48, 360, 14, {
+                isStatic: true,
+                restitution: 0.98,
+                friction: 0,
+                frictionStatic: 0,
+                label: 'menu_button_spacer',
+                render: { visible: false }
+            });
+        } else {
+            this.matter.body.setPosition(this.memoryButtonSpacer, { x: centerX, y: memoryY - 48 });
         }
     }
 
     setButtonEnabled(button, enabled) {
-        if (button?.input) {
-            button.input.enabled = enabled;
+        const hitTarget = button?.hitTarget || button;
+
+        if (hitTarget?.input) {
+            hitTarget.input.enabled = enabled;
         }
     }
 
@@ -326,8 +386,11 @@ export default class MenuScene extends Phaser.Scene {
         this.runMemoryContainer.setVisible(false);
         this.memoryOpen = false;
 
+        this.memoryCardItems = [];
+        this.memoryCardIndex = 0;
+
         const bg = this.add.rectangle(0, 0, width, height, 0x111111, 0.98).setOrigin(0, 0);
-        const title = this.add.text(width / 2, 80, 'RUN MEMORY', {
+        const title = this.add.text(width / 2, 80, 'REEL ARCHIVE', {
             fontSize: '80px',
             fontFamily: '"VT323", monospace',
             color: '#ffcc00'
@@ -336,34 +399,77 @@ export default class MenuScene extends Phaser.Scene {
         const stats = GameState.persistentStats;
         const statsPanelBg = this.add.graphics();
         statsPanelBg.fillStyle(0x000000, 0.7);
-        statsPanelBg.fillRoundedRect(width / 2 - 350, 150, 700, 160, 16);
+        statsPanelBg.fillRoundedRect(width / 2 - 410, 150, 820, 210, 16);
 
-        const statsText = this.add.text(width / 2, 230,
-            `RUNS: ${stats.totalRuns} | BEST: ${stats.bestScore} | WINS: ${stats.wins}\nDIRECTORS UNLOCKED: ${stats.unlockedDirectors.length}`, {
-                fontSize: '36px',
+        const statsText = this.add.text(width / 2, 220,
+            `LIFETIME SCORE: ${GameState.formatMillions(stats.lifetimeScore || 0)}   |   BEST PRODUCTION: ${GameState.formatMillions(GameState.getBestProduction())}\n` +
+            `FILMS COMPLETED: ${stats.totalFilmsCompleted || 0}   |   REELS DROPPED: ${stats.totalReelsDropped || 0}\n` +
+            `RUNS: ${stats.totalRuns}   |   WINS: ${stats.wins}   |   DIRECTORS WITH MILESTONES: ${Object.keys(stats.directorProgress || {}).filter((name) => GameState.getDirectorMilestoneCount(name) > 0).length}`, {
+                fontSize: '30px',
                 fontFamily: '"VT323", monospace',
                 color: '#ffcc00',
                 align: 'center',
                 stroke: '#000000',
-                strokeThickness: 3
+                strokeThickness: 3,
+                lineSpacing: 10
             }).setOrigin(0.5);
 
-        let textList = "UNLOCKED FILMS:\n\n";
-        if (GameState.persistentGallery.length === 0) {
-            textList += "(None yet. Complete a run to unlock films!)";
-        } else {
-            GameState.persistentGallery.forEach((film) => {
-                textList += `- ${film.title}\n`;
-            });
-        }
-
-        const list = this.add.text(width / 2, 350, textList, {
-            fontSize: '32px',
+        const galleryTitle = this.add.text(width / 2, 410, 'CAREER HIGHLIGHTS', {
+            fontSize: '54px',
             fontFamily: '"VT323", monospace',
-            color: '#fff',
-            wordWrap: { width: width - 200 },
-            align: 'center'
-        }).setOrigin(0.5, 0);
+            color: '#ffffff',
+            stroke: '#552200',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+
+        const galleryHint = this.add.text(width / 2, 458, 'CLICK AN UNLOCKED DIRECTOR OR FILM', {
+            fontSize: '24px',
+            fontFamily: '"VT323", monospace',
+            color: '#ffb347'
+        }).setOrigin(0.5);
+
+        const galleryGrid = this.add.container(0, 0);
+        const allDirectors = this.buildDirectorMemoryCards();
+        const unlockedFilms = GameState.persistentGallery.map((film) => ({
+            type: 'film',
+            title: film.title,
+            subtitle: film.directorName || 'UNLOCKED FILM',
+            body: this.truncateOverview(film.overview || film.cinematicFact || 'Recovered from your filmography archive.'),
+            posterPath: film.posterPath
+                || (film.poster_path
+                    ? `https://image.tmdb.org/t/p/w500${film.poster_path}`
+                    : null),
+            fact: this.truncateOverview(film.overview || film.cinematicFact || 'Recovered from your filmography archive.'),
+            film
+        }));
+
+        this.memoryCardItems = [...allDirectors, ...unlockedFilms];
+
+        const cards = [];
+        const columns = 4;
+        const startX = width / 2 - 330;
+        const startY = 560;
+        const cardW = 150;
+        const cardH = 180;
+        const gapX = 220;
+        const gapY = 220;
+        const gridItems = this.memoryCardItems.length > 0
+            ? this.memoryCardItems
+            : [{ type: 'empty', title: 'NO UNLOCKS YET', subtitle: 'Complete a production to fill the archive.' }];
+
+        gridItems.forEach((item, index) => {
+            const col = index % columns;
+            const row = Math.floor(index / columns);
+            const x = startX + (col * gapX);
+            const y = startY + (row * gapY);
+            const card = this.createMemoryGridCard(x, y, cardW, cardH, item, index);
+            cards.push(card);
+            galleryGrid.add(card);
+        });
+
+        if (gridItems.length === 1 && gridItems[0].type === 'empty') {
+            galleryGrid.list[0].disableInteractive?.();
+        }
 
         const brandText = this.add.text(width / 2, height - 250, 'Made by Tuesday Cinema Club', {
             fontSize: '32px',
@@ -376,7 +482,9 @@ export default class MenuScene extends Phaser.Scene {
             this.toggleRunMemory(width, height);
         });
 
-        this.runMemoryContainer.add([bg, title, statsPanelBg, statsText, list, brandText, closeBtnContainer]);
+        this.buildMemoryOverlay(width, height);
+
+        this.runMemoryContainer.add([bg, title, statsPanelBg, statsText, galleryTitle, galleryHint, galleryGrid, brandText, closeBtnContainer, this.memoryOverlay]);
     }
 
     toggleRunMemory(width, height) {
@@ -410,5 +518,189 @@ export default class MenuScene extends Phaser.Scene {
         });
 
         this.uiContainer.add(this.settingsBtn);
+    }
+
+    buildDirectorMemoryCards() {
+        const cinematicFacts = {
+            'Akira Kurosawa': 'Built action through weather, movement, and dynamic blocking.',
+            'Agnès Varda': 'Turned observation into play, intimacy, and cinematic essay.',
+            'Satyajit Ray': 'Found emotional scale in human detail and quiet rhythm.',
+            'Spike Lee': 'Charged frames with political urgency and direct address.',
+            'Jane Campion': 'Balances raw interiority with tactile, dangerous beauty.',
+            'Bong Joon-ho': 'Slides between genre gears without losing human stakes.',
+            'Guillermo del Toro': 'Makes monsters tender and fairy tales bruised.',
+            'John Singleton': 'Brought neighborhood specificity to mainstream scale.',
+            'Ava DuVernay': 'Builds moral momentum through ensemble clarity and focus.',
+            'Chloe Zhao': 'Lets landscape and performance breathe into each other.'
+        };
+
+        return Object.entries(cinematicFacts)
+            .filter(([directorName]) => GameState.getDirectorMilestoneCount(directorName) > 0)
+            .map(([directorName, fact]) => ({
+                type: 'director',
+                title: directorName,
+                subtitle: `${GameState.getDirectorMilestoneCount(directorName)}/5 DOSSIER DOTS`,
+                body: fact,
+                fact
+            }));
+    }
+
+    createMemoryGridCard(x, y, width, height, item, index) {
+        const container = this.add.container(x, y);
+        const unlocked = item.type !== 'empty';
+        const bg = this.add.rectangle(0, 0, width, height, unlocked ? 0x23140a : 0x222222, 0.95)
+            .setStrokeStyle(4, unlocked ? 0xffaa00 : 0x666666);
+        const header = this.add.rectangle(0, -height / 2 + 20, width, 40, unlocked ? 0xff8800 : 0x444444, 1);
+        const title = this.add.text(0, -height / 2 + 20, this.fitTitle(item.title || 'ARCHIVE'), {
+            fontSize: '22px',
+            fontFamily: '"VT323", monospace',
+            color: '#ffffff',
+            align: 'center',
+            wordWrap: { width: width - 16 }
+        }).setOrigin(0.5);
+        const body = this.add.text(0, 10, item.subtitle || '', {
+            fontSize: '22px',
+            fontFamily: '"VT323", monospace',
+            color: unlocked ? '#ffe7a8' : '#aaaaaa',
+            align: 'center',
+            wordWrap: { width: width - 20 }
+        }).setOrigin(0.5);
+
+        container.add([bg, header, title, body]);
+        container.setSize(width, height);
+        container.setInteractive(new Phaser.Geom.Rectangle(-width / 2, -height / 2, width, height), Phaser.Geom.Rectangle.Contains);
+        UI.makeSquishyButton(this, container, () => {
+            if (!unlocked) {
+                return;
+            }
+            this.openMemoryCard(index);
+        }, { suppressAutoSfx: false });
+        return container;
+    }
+
+    buildMemoryOverlay(width, height) {
+        this.memoryOverlay = this.add.container(width / 2, height / 2).setDepth(5000).setVisible(false);
+        const dim = this.add.rectangle(0, 0, width * 2, height * 2, 0x000000, 0.88).setInteractive();
+        const panel = this.add.rectangle(0, 0, 760, 980, 0x17110b, 0.98).setStrokeStyle(5, 0xffaa00);
+        this.memoryCardTitle = this.add.text(0, -420, '', {
+            fontSize: '52px',
+            fontFamily: '"VT323", monospace',
+            color: '#ffcc00',
+            align: 'center',
+            wordWrap: { width: 620 }
+        }).setOrigin(0.5);
+        this.memoryCardSubtitle = this.add.text(0, -360, '', {
+            fontSize: '28px',
+            fontFamily: '"VT323", monospace',
+            color: '#ffffff',
+            align: 'center'
+        }).setOrigin(0.5);
+        this.memoryCardPoster = this.add.rectangle(0, -120, 320, 460, 0x2a2a2a).setStrokeStyle(4, 0xffcc66);
+        this.memoryCardPosterText = this.add.text(0, -120, '', {
+            fontSize: '28px',
+            fontFamily: '"VT323", monospace',
+            color: '#221100',
+            align: 'center',
+            wordWrap: { width: 260 }
+        }).setOrigin(0.5);
+        this.memoryCardBody = this.add.text(0, 250, '', {
+            fontSize: '28px',
+            fontFamily: '"VT323", monospace',
+            color: '#f5e7c5',
+            align: 'center',
+            wordWrap: { width: 620 },
+            lineSpacing: 10
+        }).setOrigin(0.5, 0.5);
+
+        this.memoryPrevBtn = UI.createChunkyButton(this, -210, 420, 110, 60, '<', () => this.stepMemoryCard(-1));
+        this.memoryNextBtn = UI.createChunkyButton(this, 210, 420, 110, 60, '>', () => this.stepMemoryCard(1));
+        const closeBtn = UI.createChunkyButton(this, 0, 420, 220, 60, 'CLOSE', () => {
+            this.memoryOverlay.setVisible(false);
+        });
+
+        dim.on('pointerdown', () => this.memoryOverlay.setVisible(false));
+        this.memoryOverlay.add([
+            dim,
+            panel,
+            this.memoryCardTitle,
+            this.memoryCardSubtitle,
+            this.memoryCardPoster,
+            this.memoryCardPosterText,
+            this.memoryCardBody,
+            this.memoryPrevBtn,
+            this.memoryNextBtn,
+            closeBtn
+        ]);
+    }
+
+    openMemoryCard(index) {
+        if (!this.memoryCardItems.length) {
+            return;
+        }
+        this.memoryCardIndex = Phaser.Math.Wrap(index, 0, this.memoryCardItems.length);
+        this.renderMemoryCard();
+        this.memoryOverlay.setVisible(true);
+    }
+
+    stepMemoryCard(direction) {
+        if (!this.memoryCardItems.length) {
+            return;
+        }
+        this.memoryCardIndex = Phaser.Math.Wrap(this.memoryCardIndex + direction, 0, this.memoryCardItems.length);
+        this.renderMemoryCard();
+    }
+
+    renderMemoryCard() {
+        const item = this.memoryCardItems[this.memoryCardIndex];
+        if (!item) {
+            return;
+        }
+
+        this.memoryCardTitle.setText(item.title || 'ARCHIVE ENTRY');
+        this.memoryCardSubtitle.setText(item.subtitle || '');
+        this.memoryCardBody.setText(item.body || item.fact || 'No note recorded.');
+
+        if (this.memoryPosterImage) {
+            this.memoryPosterImage.destroy();
+            this.memoryPosterImage = null;
+        }
+
+        if (item.posterPath) {
+            const key = `memory_card_${item.type}_${item.film?.id || item.title}`;
+            if (!this.textures.exists(key)) {
+                this.load.image(key, item.posterPath);
+                this.load.once('complete', () => {
+                    if (this.memoryCardItems[this.memoryCardIndex] === item) {
+                        this.renderMemoryCard();
+                    }
+                });
+                this.load.start();
+            } else {
+                this.memoryPosterImage = this.add.image(0, -120, key).setOrigin(0.5);
+                const scale = Math.min(300 / this.memoryPosterImage.width, 430 / this.memoryPosterImage.height);
+                this.memoryPosterImage.setScale(scale);
+                this.memoryOverlay.addAt(this.memoryPosterImage, 5);
+            }
+            this.memoryCardPoster.setVisible(true);
+            this.memoryCardPosterText.setText('');
+        } else {
+            this.memoryCardPoster.setVisible(true);
+            this.memoryCardPosterText.setText(item.type === 'director' ? 'DIRECTOR CARD' : 'FILM CARD');
+        }
+    }
+
+    fitTitle(title) {
+        if (title.length <= 18) {
+            return title.toUpperCase();
+        }
+        return `${title.slice(0, 16).toUpperCase()}...`;
+    }
+
+    truncateOverview(text) {
+        const clean = (text || '').replace(/\s+/g, ' ').trim();
+        if (clean.length <= 220) {
+            return clean;
+        }
+        return `${clean.slice(0, 217).trim()}...`;
     }
 }
