@@ -2,9 +2,17 @@
 
 A cinematic pachinko roguelite built with Phaser 3 and Vite.
 
+![Main Menu](public/screenshots/main_menu.png)
+
 ## 🎬 Overview
 
 Experience a unique blend of arcade pachinko mechanics and cinematic storytelling. Select your directors, manage your balls, and navigate through a series of cinematic challenges.
+
+### 🎡 Director Drafting
+![Selection Wheel](public/screenshots/selection_wheel.png)
+
+### 📂 Archive & Dossier
+![Director Dossier](public/screenshots/director_dossier.png)
 
 ## 🛠️ Setup & Development
 
