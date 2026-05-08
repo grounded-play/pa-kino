@@ -101,26 +101,26 @@ export default class ShopScene extends Phaser.Scene {
 
         // ── Board area: upgrade cards ─────────────────────────────────────────────
         const cardWidth = Math.min(520, boardWidth - 120);
-        const cardHeight = 180;
-        const cardGap = 30;
-        const firstCardCenter = margin + 150 + cardHeight / 2;
+        const cardHeight = 140; // Tightened from 180
+        const cardGap = 20;    // Tightened from 30
+        const firstCardCenter = margin + 130 + cardHeight / 2;
 
         this.offeredUpgrades.forEach((upgrade, index) => {
             const cardY = firstCardCenter + index * (cardHeight + cardGap);
             const container = this.add.container(margin + boardWidth / 2, cardY);
 
             const bg = this.add.rectangle(0, 0, cardWidth, cardHeight, 0x222222).setStrokeStyle(4, 0x444444);
-            const filmStrip = this.add.rectangle(0, -cardHeight / 2 + 20, cardWidth, 40, 0x000000);
-            const title = this.add.text(-cardWidth / 2 + 28, -cardHeight / 2 + 58, upgrade.title, {
-                fontSize: '34px', fontFamily: '"VT323", monospace', color: '#ffcc00', align: 'left',
+            const filmStrip = this.add.rectangle(0, -cardHeight / 2 + 18, cardWidth, 36, 0x000000);
+            const title = this.add.text(-cardWidth / 2 + 28, -cardHeight / 2 + 52, upgrade.title, {
+                fontSize: '28px', fontFamily: '"VT323", monospace', color: '#ffcc00', align: 'left',
                 wordWrap: { width: cardWidth - 210 }
             }).setOrigin(0, 0.5);
-            const desc = this.add.text(-cardWidth / 2 + 28, 12, upgrade.desc, {
-                fontSize: '22px', fontFamily: '"VT323", monospace', color: '#cccccc', align: 'left',
+            const desc = this.add.text(-cardWidth / 2 + 28, 8, upgrade.desc, {
+                fontSize: '20px', fontFamily: '"VT323", monospace', color: '#cccccc', align: 'left',
                 wordWrap: { width: cardWidth - 210 }
             }).setOrigin(0, 0.5);
 
-            const costBtn = UI.createChunkyButton(this, cardWidth / 2 - 110, 0, 180, 66,
+            const costBtn = UI.createChunkyButton(this, cardWidth / 2 - 110, 0, 180, 60,
                 GameState.formatMillions(upgrade.cost), () => this.purchaseUpgrade(upgrade, container));
 
             container.add([bg, filmStrip, title, desc, costBtn]);
@@ -144,14 +144,54 @@ export default class ShopScene extends Phaser.Scene {
 
         // ── "NEXT FILMING >" — anchored below last card ───────────────────────────
         const lastCardBottom = firstCardCenter + 2 * (cardHeight + cardGap) + cardHeight / 2;
-        const nextBtnY = lastCardBottom + 70;
+        const nextBtnY = lastCardBottom + 60;
 
-        UI.createChunkyButton(this, margin + boardWidth / 2, nextBtnY, 300, 70, 'NEXT FILMING >', () => {
+        const nextBtn = UI.createChunkyButton(this, margin + boardWidth / 2, nextBtnY, 300, 70, 'NEXT FILMING >', () => {
             if (this.scale.fullscreenSupported && !this.scale.isFullscreen) {
                 this.scale.startFullscreen();
             }
             this.scene.start('PachinkoScene');
         }).setDepth(10);
+
+        // ── Board area: Large Director Section ──────────────────────────────────
+        const directorY = nextBtnY + 180;
+        const directorBoxW = 600;
+        const portraitW = 160;
+        const portraitH = 210;
+
+        // Director Frame (Larger)
+        const frameX = margin + boardWidth / 2;
+        const portraitCard = this.add.rectangle(frameX, directorY, portraitW + 30, portraitH + 40, 0x20150b, 1)
+            .setStrokeStyle(4, 0xffd27a).setDepth(10);
+        const portraitMatte = this.add.rectangle(frameX, directorY - 10, portraitW + 10, portraitH + 10, 0x111111, 1)
+            .setStrokeStyle(2, 0xffaa00).setDepth(10);
+
+        // Add Director Sprite
+        if (this.textures.exists('director_portraits')) {
+            const frameToken = this._resolveDirectorPortraitFrame(run);
+            const portrait = this.add.sprite(frameX, directorY - 25, 'director_portraits');
+            portrait.setTexture('director_portraits', frameToken);
+            portrait.setDisplaySize(portraitW, portraitH + 20);
+            portrait.setDepth(11);
+        }
+
+        // Blue Box beneath director
+        const blueBoxY = directorY + 160;
+        const blueBox = this.add.rectangle(frameX, blueBoxY, directorBoxW, 110, 0x003366, 0.9)
+            .setStrokeStyle(3, 0x66ccff).setDepth(10);
+        
+        const directorName = this.add.text(frameX, blueBoxY - 35, (run.directorName || 'UNKNOWN').toUpperCase(), {
+            fontSize: '28px', fontFamily: '"VT323", monospace', color: '#ffcc00', align: 'center'
+        }).setOrigin(0.5).setDepth(11);
+
+        const ratio = run.lastRating || 0;
+        const dialogue = this._getDialogue(ratio, run.directorName);
+        const traitLine = run.traitLines?.[0] || '';
+        
+        const infoText = this.add.text(frameX, blueBoxY + 10, `"${dialogue}"\n${traitLine}`, {
+            fontSize: '20px', fontFamily: '"VT323", monospace', color: '#ffffff', align: 'center',
+            wordWrap: { width: directorBoxW - 40 }
+        }).setOrigin(0.5).setDepth(11);
 
         // ── Sidebar: Run Recap ────────────────────────────────────────────────────
         const sidebar = this.add.container(margin + boardWidth, margin).setDepth(50);
@@ -289,27 +329,6 @@ export default class ShopScene extends Phaser.Scene {
         });
         sy += 20;
 
-        sidebar.add(this._divider(pad, sy, sidebarWidth - pad));
-        sy += 18;
-
-        // Speech bubble
-        const bubbleY = sy;
-        const bubbleTxt = this.add.text(sidebarWidth / 2, bubbleY + 8, `"${dialogue}"`, {
-            fontSize: '22px', fontFamily: '"VT323", monospace', color: '#dddddd', align: 'center',
-            wordWrap: { width: innerSidebarW - 16 }
-        }).setOrigin(0.5, 0);
-
-        const bubbleH = bubbleTxt.height + 18;
-        const bubbleG = this.add.graphics();
-        bubbleG.fillStyle(0x141420, 1);
-        bubbleG.fillRect(pad, bubbleY, innerSidebarW, bubbleH);
-        bubbleG.lineStyle(1, 0x334466, 1);
-        bubbleG.strokeRect(pad, bubbleY, innerSidebarW, bubbleH);
-
-        sidebar.add(bubbleG);
-        sidebar.add(bubbleTxt);
-        sy = bubbleY + bubbleH + 18;
-
         // ── Suggestion ────────────────────────────────────────────────────────────
         if (suggestion) {
             sidebar.add(this._divider(pad, sy, sidebarWidth - pad));
@@ -371,43 +390,6 @@ export default class ShopScene extends Phaser.Scene {
                 wordWrap: { width: innerSidebarW }
             }).setOrigin(0.5, 0));
             sy += 58;
-        }
-
-        const directorSectionY = Math.max(sy + 12, safeHeight - 282);
-        sidebar.add(this._divider(pad, directorSectionY, sidebarWidth - pad));
-        sidebar.add(this.add.text(sidebarWidth / 2, directorSectionY + 16, 'DIRECTOR', {
-            fontSize: '20px',
-            fontFamily: '"VT323", monospace',
-            color: '#888888',
-            align: 'center'
-        }).setOrigin(0.5, 0));
-
-        const portraitCardY = directorSectionY + 134;
-        const portraitCard = this.add.rectangle(sidebarWidth / 2, portraitCardY, 178, 236, 0x20150b, 1)
-            .setStrokeStyle(3, 0xffd27a);
-        const portraitMatte = this.add.rectangle(sidebarWidth / 2, portraitCardY - 10, 146, 186, 0x111111, 1)
-            .setStrokeStyle(2, 0xffaa00);
-        sidebar.add([portraitCard, portraitMatte]);
-
-        this._addDirectorPortrait(sidebar, run, sidebarWidth / 2, portraitCardY - 10, 138, 178, -18);
-
-        sidebar.add(this.add.text(sidebarWidth / 2, portraitCardY + 94, (run.directorName || 'UNKNOWN').toUpperCase(), {
-            fontSize: '24px',
-            fontFamily: '"VT323", monospace',
-            color: '#ffaa00',
-            align: 'center',
-            wordWrap: { width: innerSidebarW - 20 }
-        }).setOrigin(0.5, 0.5));
-
-        const traitLine = run.traitLines?.[0] || '';
-        if (traitLine) {
-            sidebar.add(this.add.text(sidebarWidth / 2, portraitCardY + 122, traitLine, {
-                fontSize: '18px',
-                fontFamily: '"VT323", monospace',
-                color: '#aaaaaa',
-                align: 'center',
-                wordWrap: { width: innerSidebarW - 20 }
-            }).setOrigin(0.5, 0.5));
         }
     }
 

@@ -1193,9 +1193,13 @@ export default class PachinkoScene extends Phaser.Scene {
         ball.ballId = this.nextBallId++;
         ball.expireAt = this.time.now + this.getReelLifetimeMs();
 
+        // Dampen inherited velocity from the funnel so it feels responsive but controlled
+        const inheritedX = Phaser.Math.Clamp(this.funnelVelocityX * 0.15, -12, 12);
+        const inheritedY = Phaser.Math.Clamp(this.funnelVelocityY * 0.15, 0, 10);
+
         this.matter.body.setVelocity(ball, {
-            x: this.funnelVelocityX,
-            y: Math.max(0, this.funnelVelocityY)
+            x: inheritedX,
+            y: inheritedY + 2 // Slight downward push to ensure it leaves the funnel cleanly
         });
 
         this.activeBalls.push(ball);
