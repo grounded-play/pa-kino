@@ -284,6 +284,10 @@ export const GameState = {
             if (savedStats) {
                 this.persistentStats = { ...this.persistentStats, ...JSON.parse(savedStats) };
             }
+            // User requested stats reset for career values
+            this.persistentStats.lifetimeScore = 0;
+            this.persistentStats.bestScore = 0;
+            this.persistentStats.bestProduction = 0;
         } catch (e) {
             console.warn('Could not load from localStorage');
         }

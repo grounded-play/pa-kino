@@ -13,10 +13,15 @@ export default class DirectorSelectScene extends Phaser.Scene {
         const margin = 40;
         const safeWidth = width - (margin * 2);
         const safeHeight = height - (margin * 2);
-        
+
         this.wheelRadius = 300;
         this.wheelCenterY = margin + (safeHeight * 0.3);
         this.pointerAngle = -Math.PI / 2;
+
+        this.isSpinning = false;
+        this.wheelLocked = false;
+        this.pendingSelection = null;
+        this.selectedSliceIndex = null;
 
         // Background Sync
         this.bgScene = this.scene.get('BackgroundScene');
@@ -26,7 +31,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
 
         // Background Dimming (Bottom layer)
         this.add.rectangle(0, 0, width, height, 0x000000, 0.4).setOrigin(0, 0);
-        
+
         // Draw Global Safe Zone Border
         const border = this.add.graphics();
         border.lineStyle(3, 0xff8800, 1);
@@ -61,7 +66,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
             color: '#ffff00',
             align: 'center'
         }).setOrigin(0.5);
-        
+
         this.penaltyText = this.add.text(width / 2, panelY + 115, 'STARTING BALLS: 10 BASE + 0 DIRECTOR - 0 RE-ROLL = 10', {
             fontSize: '24px',
             fontFamily: '"VT323", monospace',
@@ -86,34 +91,44 @@ export default class DirectorSelectScene extends Phaser.Scene {
         this.wheelGraphic.lineStyle(6, 0xff8800, 1); // Tuesday Cinema Club orange
         this.wheelGraphic.fillCircle(0, 0, this.wheelRadius);
         this.wheelGraphic.strokeCircle(0, 0, this.wheelRadius);
-        
+
         // Make graphic interactive to fix the hit area
         this.wheelGraphic.setInteractive(new Phaser.Geom.Circle(0, 0, this.wheelRadius), Phaser.Geom.Circle.Contains);
         this.wheelContainer.add(this.wheelGraphic);
+
+        const sliceColor = 0x161c2b; // Dark blueish hue to match the portrait backgrounds
 
         // Add director names and portraits to wheel
         this.directors.forEach((dir, i) => {
             const angle = this.pointerAngle + (i * this.sliceAngle);
             const milestoneCount = GameState.getDirectorMilestoneCount(dir.name);
-            
+
+            // Draw slice background color
+            const startAngle = angle - (this.sliceAngle / 2);
+            const endAngle = angle + (this.sliceAngle / 2);
+            const currentSliceColor = (milestoneCount > 0) ? 0x080f21 : 0x040810; // Fog of war logic
+            this.wheelGraphic.fillStyle(currentSliceColor, 1);
+            this.wheelGraphic.slice(0, 0, this.wheelRadius - 4, startAngle, endAngle, false);
+            this.wheelGraphic.fillPath();
+
             // Draw segment divider line (centered between names)
             const dividerAngle = angle - (this.sliceAngle / 2);
             this.wheelGraphic.lineStyle(4, 0xff8800, 0.5);
             this.wheelGraphic.lineBetween(
-                0, 0, 
-                Math.cos(dividerAngle) * this.wheelRadius, 
+                0, 0,
+                Math.cos(dividerAngle) * this.wheelRadius,
                 Math.sin(dividerAngle) * this.wheelRadius
             );
-            
+
             // 1. Portrait on Wheel
             const portraitKey = dir.portraitKey || dir.portraitFrame || i;
-            const portraitX = Math.cos(angle) * 200;
-            const portraitY = Math.sin(angle) * 200;
+            const portraitX = Math.cos(angle) * 185; // Moved in to avoid lights
+            const portraitY = Math.sin(angle) * 185;
             if (this.textures.exists('director_portraits')) {
                 const texture = this.textures.get('director_portraits');
                 const safeFrame = texture.has(portraitKey) ? portraitKey : i;
                 const wheelSprite = this.add.sprite(portraitX, portraitY, 'director_portraits', safeFrame);
-                wheelSprite.setDisplaySize(96, 96);
+                wheelSprite.setDisplaySize(82, 82); // Scaled down slightly
                 wheelSprite.rotation = angle + Math.PI / 2;
                 if (milestoneCount === 0) {
                     wheelSprite.setTint(0x666666);
@@ -183,7 +198,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
             wordWrap: { width: 500 },
             lineSpacing: 4
         }).setOrigin(0.5);
-        this.roadmapContainer = this.add.container(0, 120);
+        this.roadmapContainer = this.add.container(0, 150);
         this.dossierTextContainer.add([
             this.directorNameTextLarge,
             this.traitBox,
@@ -196,7 +211,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
         this.startRunButton = UI.createChunkyButton(this, width / 2 + 180, margin + safeHeight - 210, 320, 96, 'START PRODUCTION', () => {
             this.beginRun();
         }, 'GO TO THE THEATER');
-        
+
         // Add a pulsing effect to the primary action button
         this.tweens.add({
             targets: this.startRunButton,
@@ -220,7 +235,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
             this.avatarContainer,
             this.dossierTextContainer
         ]);
-        
+
         this.uiGroup.add([this.dossierContainer, this.startRunButton, this.rerollButton]);
         this.uiContainer.add(this.uiGroup);
 
@@ -231,7 +246,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
             GameState.draftingPenalty = 0; // Reset penalty when leaving
             this.scene.start('MenuScene');
         });
-        
+
         this.uiGroup.add(backBtnContainer);
 
         // Bouncy entry
@@ -250,12 +265,13 @@ export default class DirectorSelectScene extends Phaser.Scene {
     }
 
     spinWheel() {
-        if (this.isSpinning || this.wheelLocked) return;
+        // Only block starting a new spin if settings is open, but allow opening settings DURING a spin
+        if (this.isSpinning || this.wheelLocked || (this.settingsOverlay && this.settingsOverlay.visible)) return;
         this.isSpinning = true;
         this.pendingSelection = null;
         this.dossierContainer.setVisible(false);
         this.statusText.setText('SPINNING THE WHEEL...');
-        
+
         // Hide portrait during spin
         if (this.directorPortrait) {
             this.directorPortrait.setAlpha(0);
@@ -265,7 +281,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
 
         const spins = Phaser.Math.Between(5, 8);
         const targetIndex = Phaser.Math.Between(0, this.directors.length - 1);
-        
+
         const targetAngleRad = -(targetIndex * this.sliceAngle);
         const totalRotation = (Math.PI * 2 * spins) + targetAngleRad;
 
@@ -294,12 +310,12 @@ export default class DirectorSelectScene extends Phaser.Scene {
     handleSpinTick() {
         const currentRotation = this.wheelContainer.rotation;
         const sliceIndex = this.getNeedleSliceIndex(currentRotation);
-        
+
         if (sliceIndex !== this.selectedSliceIndex) {
             // Calculate rotational velocity to determine click sound
             const speed = Math.abs(currentRotation - this.lastRotation);
             this.selectedSliceIndex = sliceIndex;
-            
+
             if (!this.sound.mute) {
                 this.playTickSound(speed);
             }
@@ -390,7 +406,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
                 const profilePath = profileData.profile_path
                     ? `https://image.tmdb.org/t/p/w200${profileData.profile_path}`
                     : null;
-                
+
                 this.pendingSelection = {
                     ...selectedDirector,
                     films,
@@ -532,7 +548,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
         if (this.textures.exists('director_portraits')) {
             const portraitKey = selection.portraitKey || selection.portraitFrame || frame;
             const texture = this.textures.get('director_portraits');
-            
+
             if (texture.has(portraitKey)) {
                 if (!this.directorPortrait) {
                     this.directorPortrait = this.add.sprite(0, -8, 'director_portraits', portraitKey);
@@ -678,7 +694,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
 
     renderRoadmap(selection) {
         this.roadmapContainer.removeAll(true);
-        const title = this.add.text(0, 0, 'CAREER ROADMAP', {
+        const title = this.add.text(0, 130, 'CAREER ROADMAP', { // Moved below posters
             fontSize: '24px',
             fontFamily: '"VT323", monospace',
             color: '#66f2ff'
@@ -691,11 +707,11 @@ export default class DirectorSelectScene extends Phaser.Scene {
             const unlocked = unlockedIds.has(film.id);
             const x = -200 + (index * 100);
             const card = this.add.container(x, 62);
-            const box = this.add.rectangle(0, 0, 92, 92, unlocked ? 0x2a1a08 : 0x1e1e1e, 0.96)
+            const box = this.add.rectangle(0, 0, 70, 105, unlocked ? 0x2a1a08 : 0x1e1e1e, 0.96)
                 .setStrokeStyle(3, unlocked ? 0xffaa00 : 0x555555);
-            const leftDot = this.add.circle(0, -30, 7, unlocked ? 0xffe066 : 0x555555)
+            const leftDot = this.add.circle(0, -38, 7, unlocked ? 0xffe066 : 0x555555)
                 .setStrokeStyle(2, unlocked ? 0xff8800 : 0x333333);
-            const stepLabel = this.add.text(0, -10, `${index + 1}`, {
+            const stepLabel = this.add.text(0, -18, `${index + 1}`, {
                 fontSize: '18px',
                 fontFamily: '"VT323", monospace',
                 color: '#ffffff'

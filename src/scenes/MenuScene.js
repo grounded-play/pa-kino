@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GameState } from '../GameState.js';
 import { UI } from '../utils/UI.js';
+import { TMDB } from '../utils/TMDB.js';
 
 export default class MenuScene extends Phaser.Scene {
     constructor() {
@@ -389,102 +390,105 @@ export default class MenuScene extends Phaser.Scene {
         this.memoryCardItems = [];
         this.memoryCardIndex = 0;
 
-        const bg = this.add.rectangle(0, 0, width, height, 0x111111, 0.98).setOrigin(0, 0);
-        const title = this.add.text(width / 2, 80, 'REEL ARCHIVE', {
-            fontSize: '80px',
+        const bg = this.add.rectangle(0, 0, width, height, 0x050505, 0.995).setOrigin(0, 0);
+
+        const title = this.add.text(width / 2, 100, 'REEL ARCHIVE', {
+            fontSize: '64px',
             fontFamily: '"VT323", monospace',
-            color: '#ffcc00'
+            color: '#ffcc00',
+            stroke: '#000000',
+            strokeThickness: 6
         }).setOrigin(0.5);
 
         const stats = GameState.persistentStats;
         const statsPanelBg = this.add.graphics();
-        statsPanelBg.fillStyle(0x000000, 0.7);
-        statsPanelBg.fillRoundedRect(width / 2 - 410, 150, 820, 210, 16);
+        statsPanelBg.fillStyle(0x000000, 0.9);
+        statsPanelBg.lineStyle(2, 0x66f2ff, 0.4);
+        statsPanelBg.fillRoundedRect(width / 2 - 460, 150, 920, 110, 10);
+        statsPanelBg.strokeRoundedRect(width / 2 - 460, 150, 920, 110, 10);
 
-        const statsText = this.add.text(width / 2, 220,
-            `LIFETIME SCORE: ${GameState.formatMillions(stats.lifetimeScore || 0)}   |   BEST PRODUCTION: ${GameState.formatMillions(GameState.getBestProduction())}\n` +
-            `FILMS COMPLETED: ${stats.totalFilmsCompleted || 0}   |   REELS DROPPED: ${stats.totalReelsDropped || 0}\n` +
-            `RUNS: ${stats.totalRuns}   |   WINS: ${stats.wins}   |   DIRECTORS WITH MILESTONES: ${Object.keys(stats.directorProgress || {}).filter((name) => GameState.getDirectorMilestoneCount(name) > 0).length}`, {
-                fontSize: '30px',
+        const statsText = this.add.text(width / 2, 205,
+            `FILMS CAPTURED: ${stats.totalFilmsCompleted || 0}/50   |   REELS DROPPED: ${stats.totalReelsDropped || 0}\n` +
+            `TOTAL RUNS: ${stats.totalRuns}   |   WINS: ${stats.wins}`, {
+                fontSize: '26px',
                 fontFamily: '"VT323", monospace',
-                color: '#ffcc00',
+                color: '#66f2ff',
                 align: 'center',
                 stroke: '#000000',
-                strokeThickness: 3,
-                lineSpacing: 10
+                strokeThickness: 2,
+                lineSpacing: 4
             }).setOrigin(0.5);
 
-        const galleryTitle = this.add.text(width / 2, 410, 'CAREER HIGHLIGHTS', {
-            fontSize: '54px',
-            fontFamily: '"VT323", monospace',
-            color: '#ffffff',
-            stroke: '#552200',
-            strokeThickness: 4
-        }).setOrigin(0.5);
+        // 6 columns (Director + 5 films) by 10 rows (1 per director)
+        const gridContainer = this.add.container(width / 2, 348);
+        const directors = TMDB.getHardcodedDirectors();
+        const campaignData = TMDB.CAMPAIGN_DATA;
+        const persistentGallery = GameState.persistentGallery;
 
-        const galleryHint = this.add.text(width / 2, 458, 'CLICK AN UNLOCKED DIRECTOR OR FILM', {
-            fontSize: '24px',
-            fontFamily: '"VT323", monospace',
-            color: '#ffb347'
-        }).setOrigin(0.5);
+        // Truly Portrait cards (Taller than wide)
+        const colWidth = 100; 
+        const rowHeight = 135;
+        const startX = -((6 * colWidth) / 2) + (colWidth / 2);
+        const startY = 10;
 
-        const galleryGrid = this.add.container(0, 0);
-        const allDirectors = this.buildDirectorMemoryCards();
-        const unlockedFilms = GameState.persistentGallery.map((film) => ({
-            type: 'film',
-            title: film.title,
-            subtitle: film.directorName || 'UNLOCKED FILM',
-            body: this.truncateOverview(film.overview || film.cinematicFact || 'Recovered from your filmography archive.'),
-            posterPath: film.posterPath
-                || (film.poster_path
-                    ? `https://image.tmdb.org/t/p/w500${film.poster_path}`
-                    : null),
-            fact: this.truncateOverview(film.overview || film.cinematicFact || 'Recovered from your filmography archive.'),
-            film
-        }));
+        directors.forEach((director, dirIndex) => {
+            const dirY = startY + (dirIndex * (rowHeight + 6));
+            
+            // 1. The Director Card (First column)
+            const films = campaignData[director.name] || [];
+            const capturedCount = films.filter(f => persistentGallery.some(g => g.id === f.id)).length;
+            
+            const dirItem = {
+                type: 'director',
+                title: director.name,
+                capturedCount: capturedCount,
+                unlocked: capturedCount > 0,
+                directorData: director,
+                body: director.cinematicFact || `A legend of the silver screen.`,
+                fact: director.cinematicFact
+            };
+            
+            const dirCard = this.createMemoryGridCard(startX, dirY, colWidth - 8, rowHeight, dirItem, this.memoryCardItems.length);
+            this.memoryCardItems.push(dirItem);
+            gridContainer.add(dirCard);
 
-        this.memoryCardItems = [...allDirectors, ...unlockedFilms];
+            // 2. The 5 Films
+            films.forEach((film, filmIndex) => {
+                const unlocked = persistentGallery.some(g => g.id === film.id);
+                const x = startX + ((filmIndex + 1) * colWidth);
+                const y = dirY;
 
-        const cards = [];
-        const columns = 4;
-        const startX = width / 2 - 330;
-        const startY = 560;
-        const cardW = 150;
-        const cardH = 180;
-        const gapX = 220;
-        const gapY = 220;
-        const gridItems = this.memoryCardItems.length > 0
-            ? this.memoryCardItems
-            : [{ type: 'empty', title: 'NO UNLOCKS YET', subtitle: 'Complete a production to fill the archive.' }];
+                const item = {
+                    type: 'film',
+                    title: film.title,
+                    subtitle: director.name,
+                    id: film.id,
+                    unlocked: unlocked,
+                    body: film.overview || `A ${director.name} production.`,
+                    posterPath: film.poster_path ? (film.poster_path.startsWith('http') ? film.poster_path : `https://image.tmdb.org/t/p/w500${film.poster_path}`) : null,
+                    film: film
+                };
 
-        gridItems.forEach((item, index) => {
-            const col = index % columns;
-            const row = Math.floor(index / columns);
-            const x = startX + (col * gapX);
-            const y = startY + (row * gapY);
-            const card = this.createMemoryGridCard(x, y, cardW, cardH, item, index);
-            cards.push(card);
-            galleryGrid.add(card);
+                const card = this.createMemoryGridCard(x, y, colWidth - 8, rowHeight, item, this.memoryCardItems.length);
+                this.memoryCardItems.push(item);
+                gridContainer.add(card);
+            });
         });
 
-        if (gridItems.length === 1 && gridItems[0].type === 'empty') {
-            galleryGrid.list[0].disableInteractive?.();
-        }
-
-        const brandText = this.add.text(width / 2, height - 250, 'Made by Tuesday Cinema Club', {
-            fontSize: '32px',
-            fontFamily: '"VT323", monospace',
-            color: '#ffcc00'
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-        brandText.on('pointerdown', () => window.open('http://linktr.ee/Tuesday_Cinema_Club', '_blank'));
-
-        const closeBtnContainer = UI.createChunkyButton(this, width / 2, height - 120, 300, 80, 'CLOSE', () => {
+        const closeBtnContainer = UI.createChunkyButton(this, width / 2, height - 120, 240, 70, 'CLOSE', () => {
             this.toggleRunMemory(width, height);
         });
 
         this.buildMemoryOverlay(width, height);
 
-        this.runMemoryContainer.add([bg, title, statsPanelBg, statsText, galleryTitle, galleryHint, galleryGrid, brandText, closeBtnContainer, this.memoryOverlay]);
+        this.runMemoryContainer.add([
+            bg, title, statsPanelBg, statsText, 
+            gridContainer, closeBtnContainer, 
+            this.memoryOverlay
+        ]);
+
+        this.runMemoryContainer.setDepth(4500);
+        this.runMemoryContainer.setVisible(false);
     }
 
     toggleRunMemory(width, height) {
@@ -547,34 +551,120 @@ export default class MenuScene extends Phaser.Scene {
 
     createMemoryGridCard(x, y, width, height, item, index) {
         const container = this.add.container(x, y);
-        const unlocked = item.type !== 'empty';
-        const bg = this.add.rectangle(0, 0, width, height, unlocked ? 0x23140a : 0x222222, 0.95)
-            .setStrokeStyle(4, unlocked ? 0xffaa00 : 0x666666);
-        const header = this.add.rectangle(0, -height / 2 + 20, width, 40, unlocked ? 0xff8800 : 0x444444, 1);
-        const title = this.add.text(0, -height / 2 + 20, this.fitTitle(item.title || 'ARCHIVE'), {
-            fontSize: '22px',
-            fontFamily: '"VT323", monospace',
-            color: '#ffffff',
-            align: 'center',
-            wordWrap: { width: width - 16 }
-        }).setOrigin(0.5);
-        const body = this.add.text(0, 10, item.subtitle || '', {
-            fontSize: '22px',
-            fontFamily: '"VT323", monospace',
-            color: unlocked ? '#ffe7a8' : '#aaaaaa',
-            align: 'center',
-            wordWrap: { width: width - 20 }
-        }).setOrigin(0.5);
+        const unlocked = item.unlocked;
+        const isDirector = item.type === 'director';
+        const capturedCount = item.capturedCount || 0;
+        
+        // Background with better contrast
+        const bg = this.add.rectangle(0, 0, width, height, 
+            isDirector ? (unlocked ? 0x331100 : 0x111) : (unlocked ? 0x000 : 0x151515), 
+            0.95)
+            .setStrokeStyle(isDirector ? 4 : 2, unlocked ? (isDirector ? 0xffcc00 : 0xffaa00) : 0x333333);
+        
+        const hitArea = this.add.rectangle(0, 0, width, height, 0xffffff, 0.001);
+        
+        // Progression logic for Director Card
+        let displayText = '';
+        if (isDirector) {
+            if (capturedCount > 0) {
+                // Reveal full name as soon as any film is unlocked
+                displayText = item.title;
+                
+                // Add biographical lines based on progression
+                if (capturedCount >= 2) displayText += `\n${item.directorData?.born || ''}`;
+                if (capturedCount >= 3) displayText += `\n${item.directorData?.place || ''}`;
+                if (capturedCount >= 4) displayText += `\nBIO UNLOCKED`;
+                
+                // If nothing else to show, show progress
+                if (capturedCount < 4) {
+                    displayText += `\nREELS: ${capturedCount}/5`;
+                }
+            } else {
+                displayText = '????';
+            }
+        } else if (unlocked) {
+            // No truncation, use full title with wrapping
+            displayText = item.title;
+        } else {
+            displayText = '????';
+        }
 
-        container.add([bg, header, title, body]);
+        const titleText = this.add.text(0, 0, displayText.toUpperCase(), {
+            fontSize: isDirector ? '11px' : '12px',
+            fontFamily: '"VT323", monospace',
+            color: (isDirector ? (capturedCount > 0) : unlocked) ? '#ffffff' : '#444444',
+            align: 'center',
+            wordWrap: { width: width - 10 }
+        }).setOrigin(0.5).setDepth(30);
+
+        // Thumbnail for unlocked films or 5/5 directors
+        const showThumb = (!isDirector && unlocked && item.posterPath) || (isDirector && capturedCount >= 5);
+        if (showThumb) {
+            const thumbKey = isDirector ? 'director_portraits' : `thumb_${item.id || item.title}`;
+            
+            const handleThumbReady = () => {
+                if (container && container.scene) {
+                    // Safety check to ensure we don't add duplicate thumbs
+                    if (container.getData('hasThumb')) return;
+
+                    const thumb = this.add.sprite(0, 0, isDirector ? 'director_portraits' : thumbKey);
+                    if (isDirector) {
+                        thumb.setFrame(item.directorData.portraitFrame || 0);
+                    }
+                    thumb.setDisplaySize(width, height).setAlpha(isDirector ? 1 : 0.85);
+                    container.add(thumb);
+                    thumb.setDepth(5); 
+                    container.setData('hasThumb', true);
+                    
+                    titleText.setStroke('#000', 8);
+                    if (isDirector) {
+                        titleText.setY(height/2 - 18);
+                        titleText.setFontSize('9px');
+                    }
+                }
+            };
+
+            if (isDirector || this.textures.exists(thumbKey)) {
+                handleThumbReady();
+            } else if (item.posterPath) {
+                this.load.image(thumbKey, item.posterPath);
+                this.load.once(`filecomplete-image-${thumbKey}`, handleThumbReady);
+                this.load.start();
+            }
+        }
+
+        // Indicators for captured films
+        if (isDirector) {
+            // Move dots to the TOP of the card for maximum visibility
+            for (let i = 0; i < 5; i++) {
+                const dotX = -width/2 + 25 + (i * 12);
+                const dotY = -height/2 + 15; // Top of card
+                const active = i < capturedCount;
+                const dot = this.add.circle(dotX, dotY, 4, active ? 0xffea00 : 0x000000)
+                    .setStrokeStyle(2, 0xffffff)
+                    .setDepth(20);
+                container.add(dot);
+            }
+        } else if (unlocked) {
+            const indicator = this.add.circle(width / 2 - 8, -height / 2 + 8, 4, 0x00ff88)
+                .setStrokeStyle(1, 0x000000)
+                .setDepth(20);
+            container.add(indicator);
+        }
+
+        container.add([bg, hitArea, titleText]);
         container.setSize(width, height);
-        container.setInteractive(new Phaser.Geom.Rectangle(-width / 2, -height / 2, width, height), Phaser.Geom.Rectangle.Contains);
+        
+        hitArea.setInteractive({ useHandCursor: true });
+        
         UI.makeSquishyButton(this, container, () => {
             if (!unlocked) {
+                this.cameras.main.shake(80, 0.001);
                 return;
             }
             this.openMemoryCard(index);
-        }, { suppressAutoSfx: false });
+        }, { hitTarget: hitArea, suppressAutoSfx: false });
+
         return container;
     }
 
@@ -612,9 +702,13 @@ export default class MenuScene extends Phaser.Scene {
             lineSpacing: 10
         }).setOrigin(0.5, 0.5);
 
-        this.memoryPrevBtn = UI.createChunkyButton(this, -210, 420, 110, 60, '<', () => this.stepMemoryCard(-1));
-        this.memoryNextBtn = UI.createChunkyButton(this, 210, 420, 110, 60, '>', () => this.stepMemoryCard(1));
-        const closeBtn = UI.createChunkyButton(this, 0, 420, 220, 60, 'CLOSE', () => {
+        this.memoryPrevBtn = UI.createChunkyButton(this, -180, 420, 80, 60, '<', () => this.stepMemoryCard(-1));
+        this.memoryNextBtn = UI.createChunkyButton(this, 180, 420, 80, 60, '>', () => this.stepMemoryCard(1));
+        
+        this.memoryPrevUnlockedBtn = UI.createChunkyButton(this, -290, 420, 100, 60, '<< UNL', () => this.stepUnlockedMemoryCard(-1));
+        this.memoryNextUnlockedBtn = UI.createChunkyButton(this, 290, 420, 100, 60, 'UNL >>', () => this.stepUnlockedMemoryCard(1));
+        
+        const closeBtn = UI.createChunkyButton(this, 0, 420, 180, 60, 'CLOSE', () => {
             this.memoryOverlay.setVisible(false);
         });
 
@@ -629,6 +723,8 @@ export default class MenuScene extends Phaser.Scene {
             this.memoryCardBody,
             this.memoryPrevBtn,
             this.memoryNextBtn,
+            this.memoryPrevUnlockedBtn,
+            this.memoryNextUnlockedBtn,
             closeBtn
         ]);
     }
@@ -650,50 +746,91 @@ export default class MenuScene extends Phaser.Scene {
         this.renderMemoryCard();
     }
 
-    renderMemoryCard() {
-        const item = this.memoryCardItems[this.memoryCardIndex];
-        if (!item) {
+    stepUnlockedMemoryCard(direction) {
+        if (!this.memoryCardItems.length) {
             return;
         }
 
-        this.memoryCardTitle.setText(item.title || 'ARCHIVE ENTRY');
-        this.memoryCardSubtitle.setText(item.subtitle || '');
-        this.memoryCardBody.setText(item.body || item.fact || 'No note recorded.');
+        let nextIndex = this.memoryCardIndex;
+        for (let i = 0; i < this.memoryCardItems.length; i++) {
+            nextIndex = Phaser.Math.Wrap(nextIndex + direction, 0, this.memoryCardItems.length);
+            if (this.memoryCardItems[nextIndex].unlocked) {
+                this.memoryCardIndex = nextIndex;
+                this.renderMemoryCard();
+                return;
+            }
+        }
+    }
+
+    renderMemoryCard() {
+        const item = this.memoryCardItems[this.memoryCardIndex];
+        if (!item) return;
+
+        const isDirector = item.type === 'director';
+        const capturedCount = item.capturedCount || 0;
+        const isUnlocked = isDirector ? (capturedCount > 0) : item.unlocked;
+
+        const countText = isDirector ? `[DIRECTOR]` : `[#${this.memoryCardIndex + 1}/50]`;
+        const titleText = isUnlocked ? item.title.toUpperCase() : '????';
+        
+        this.memoryCardTitle.setText(`${countText} ${titleText}`);
+        this.memoryCardSubtitle.setText(item.subtitle ? item.subtitle.toUpperCase() : '');
+        
+        let bodyText = item.body || item.fact || 'No note recorded.';
+        if (isDirector) {
+            // Progressive Dossier reveal
+            const dob = capturedCount >= 2 ? (item.directorData?.born || '???') : '??????????';
+            const place = capturedCount >= 3 ? (item.directorData?.place || '???') : '??????????';
+            const bio = capturedCount >= 4 ? (item.directorData?.bio || item.body) : 'DATA ENCRYPTED - CAPTURE MORE REELS TO UNLOCK BIOGRAPHICAL RECORDS.';
+            bodyText = `BORN: ${dob}\nLOCATION: ${place}\n\nDOSSIER:\n${bio}`;
+        }
+        this.memoryCardBody.setText(bodyText);
 
         if (this.memoryPosterImage) {
             this.memoryPosterImage.destroy();
             this.memoryPosterImage = null;
         }
 
-        if (item.posterPath) {
-            const key = `memory_card_${item.type}_${item.film?.id || item.title}`;
-            if (!this.textures.exists(key)) {
-                this.load.image(key, item.posterPath);
-                this.load.once('complete', () => {
-                    if (this.memoryCardItems[this.memoryCardIndex] === item) {
-                        this.renderMemoryCard();
-                    }
-                });
-                this.load.start();
+        // Show photo for films OR mastered directors
+        const showPhoto = (!isDirector && item.posterPath) || (isDirector && capturedCount >= 5);
+        
+        if (showPhoto) {
+            if (isDirector) {
+                this.memoryPosterImage = this.add.sprite(0, -120, 'director_portraits').setOrigin(0.5);
+                this.memoryPosterImage.setFrame(item.directorData.portraitFrame || 0);
+                this.memoryPosterImage.setDisplaySize(310, 450);
+                this.memoryOverlay.add(this.memoryPosterImage);
+                this.memoryCardPosterText.setText('');
             } else {
+                const key = `memory_card_${item.type}_${item.film?.id || item.title}`;
+                if (!this.textures.exists(key)) {
+                    this.load.image(key, item.posterPath);
+                    this.load.once('complete', () => {
+                        if (this.memoryCardItems[this.memoryCardIndex] === item) {
+                            this.renderMemoryCard();
+                        }
+                    });
+                    this.load.start();
+                    this.memoryCardPosterText.setText('LOADING...');
+                    return;
+                }
+
                 this.memoryPosterImage = this.add.image(0, -120, key).setOrigin(0.5);
-                const scale = Math.min(300 / this.memoryPosterImage.width, 430 / this.memoryPosterImage.height);
+                const scale = Math.min(310 / this.memoryPosterImage.width, 450 / this.memoryPosterImage.height);
                 this.memoryPosterImage.setScale(scale);
-                this.memoryOverlay.addAt(this.memoryPosterImage, 5);
+                this.memoryOverlay.add(this.memoryPosterImage);
+                this.memoryCardPosterText.setText('');
             }
-            this.memoryCardPoster.setVisible(true);
-            this.memoryCardPosterText.setText('');
         } else {
-            this.memoryCardPoster.setVisible(true);
-            this.memoryCardPosterText.setText(item.type === 'director' ? 'DIRECTOR CARD' : 'FILM CARD');
+            this.memoryCardPosterText.setText(isDirector ? 'PORTRAIT ENCRYPTED' : 'NO POSTER DATA');
         }
     }
 
-    fitTitle(title) {
-        if (title.length <= 18) {
+    fitTitle(title, maxLen = 14) {
+        if (title.length <= maxLen) {
             return title.toUpperCase();
         }
-        return `${title.slice(0, 16).toUpperCase()}...`;
+        return `${title.slice(0, maxLen - 2).toUpperCase()}..`;
     }
 
     truncateOverview(text) {

@@ -47,74 +47,74 @@ async function tmdbFetch(path, query = {}) {
 
 const CAMPAIGN_DATA = {
     "Akira Kurosawa": [
-        { title: "Seven Samurai", id: 346, difficultyMult: 1 },
-        { title: "Yojimbo", id: 11878, difficultyMult: 1.25 },
-        { title: "Rashomon", id: 548, difficultyMult: 1.5 },
-        { title: "Ran", id: 11645, difficultyMult: 1.75 },
-        { title: "Dreams", id: 1117857, difficultyMult: 2 }
+        { title: "Seven Samurai", id: 346, difficultyMult: 1, poster_path: "/v696v3nZ72Brq7tBLmWB1H8mJ7K.jpg", overview: "A village of farmers hire seven masterless samurai to help them defend themselves against bandits." },
+        { title: "Yojimbo", id: 11878, difficultyMult: 1.25, poster_path: "/9M89Xat07V9v8pE9S7pS7pS7pS7.jpg", overview: "A nameless ronin arrives in a town divided by two warring gangs." },
+        { title: "Rashomon", id: 548, difficultyMult: 1.5, poster_path: "/9m9p7S7pS7pS7pS7pS7pS7pS7pS.jpg", overview: "The stories of a murder and a rape are told from four different perspectives." },
+        { title: "Ran", id: 11645, difficultyMult: 1.75, poster_path: "/m9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "An aging warlord decides to abdicate as ruler and divide his domain among his three sons." },
+        { title: "Dreams", id: 1117857, difficultyMult: 2, poster_path: "/dreams_kurosawa.jpg", overview: "A collection of short films based on actual dreams that director Akira Kurosawa claimed to have had." }
     ],
     "Agnès Varda": [
-        { title: "Cléo from 5 to 7", id: 499, difficultyMult: 1 },
-        { title: "Vagabond", id: 44018, difficultyMult: 1.25 },
-        { title: "Le Bonheur", id: 53023, difficultyMult: 1.5 },
-        { title: "Faces Places", id: 451995, difficultyMult: 1.75 },
-        { title: "The Gleaners & I", id: 44379, difficultyMult: 2 }
+        { title: "Cléo from 5 to 7", id: 499, difficultyMult: 1, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "Cléo, a singer, awaits the results of a medical test." },
+        { title: "Vagabond", id: 44018, difficultyMult: 1.25, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A young woman wanders through the French countryside during a cold winter." },
+        { title: "Le Bonheur", id: 53023, difficultyMult: 1.5, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A happily married carpenter falls in love with a woman at the post office." },
+        { title: "Faces Places", id: 451995, difficultyMult: 1.75, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "Varda and JR travel through rural France, creating large-scale portraits of the people they encounter." },
+        { title: "The Gleaners & I", id: 44379, difficultyMult: 2, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A documentary about people who forage for food and discarded items." }
     ],
     "Satyajit Ray": [
-        { title: "Pather Panchali", id: 5801, difficultyMult: 1 },
-        { title: "Aparajito", id: 897, difficultyMult: 1.25 },
-        { title: "The World of Apu", id: 896, difficultyMult: 1.5 },
-        { title: "Charulata", id: 35790, difficultyMult: 1.75 },
-        { title: "The Music Room", id: 822, difficultyMult: 2 }
+        { title: "Pather Panchali", id: 5801, difficultyMult: 1, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "The childhood of Apu in a rural Bengali village." },
+        { title: "Aparajito", id: 897, difficultyMult: 1.25, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "Apu's life as a student in Varanasi and Calcutta." },
+        { title: "The World of Apu", id: 896, difficultyMult: 1.5, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "Apu's adulthood, marriage, and relationship with his son." },
+        { title: "Charulata", id: 35790, difficultyMult: 1.75, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A lonely woman in 19th-century Bengal falls in love with her husband's cousin." },
+        { title: "The Music Room", id: 822, difficultyMult: 2, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A landlord spends the last of his fortune on music concerts to maintain his social status." }
     ],
     "Spike Lee": [
-        { title: "Do the Right Thing", id: 925, difficultyMult: 1 },
-        { title: "Malcolm X", id: 1883, difficultyMult: 1.25 },
-        { title: "BlacKkKlansman", id: 487558, difficultyMult: 1.5 },
-        { title: "25th Hour", id: 1429, difficultyMult: 1.75 },
-        { title: "Bamboozled", id: 24664, difficultyMult: 2 }
+        { title: "Do the Right Thing", id: 925, difficultyMult: 1, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "On the hottest day of the year on a street in Bedford-Stuyvesant, Brooklyn, everyone's hate and bigotry smolders and builds until it explodes into violence." },
+        { title: "Malcolm X", id: 1883, difficultyMult: 1.25, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A tribute to the controversial Black nationalist leader." },
+        { title: "BlacKkKlansman", id: 487558, difficultyMult: 1.5, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "An African American police officer from Colorado Springs successfully manages to infiltrate the local Ku Klux Klan branch." },
+        { title: "25th Hour", id: 1429, difficultyMult: 1.75, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A man has 24 hours to say goodbye to his family and friends before he begins a seven-year prison sentence." },
+        { title: "Bamboozled", id: 24664, difficultyMult: 2, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A frustrated African American TV writer proposes a blackface minstrel show in protest, but to his horror, it becomes a smash hit." }
     ],
     "Jane Campion": [
-        { title: "The Piano", id: 713, difficultyMult: 1 },
-        { title: "Bright Star", id: 29963, difficultyMult: 1.25 },
-        { title: "The Power of the Dog", id: 600583, difficultyMult: 1.5 },
-        { title: "In the Cut", id: 10944, difficultyMult: 1.75 },
-        { title: "An Angel at My Table", id: 2891, difficultyMult: 2 }
+        { title: "The Piano", id: 713, difficultyMult: 1, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A mute woman and her daughter are sent to New Zealand for an arranged marriage." },
+        { title: "Bright Star", id: 29963, difficultyMult: 1.25, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "The three-year romance between 19th-century poet John Keats and Fanny Brawne." },
+        { title: "The Power of the Dog", id: 600583, difficultyMult: 1.5, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A domineering but charismatic rancher wages a war of intimidation on his brother's new wife and her son." },
+        { title: "In the Cut", id: 10944, difficultyMult: 1.75, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A lonely writer becomes obsessed with a gruesome murder and the detective investigating it." },
+        { title: "An Angel at My Table", id: 2891, difficultyMult: 2, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A film based on the autobiographies of New Zealand writer Janet Frame." }
     ],
     "Bong Joon-ho": [
-        { title: "Parasite", id: 496243, difficultyMult: 1 },
-        { title: "Snowpiercer", id: 110415, difficultyMult: 1.25 },
-        { title: "Memories of Murder", id: 11423, difficultyMult: 1.5 },
-        { title: "The Host", id: 1255, difficultyMult: 1.75 },
-        { title: "Barking Dogs Never Bite", id: 21531, difficultyMult: 2 }
+        { title: "Parasite", id: 496243, difficultyMult: 1, poster_path: "/7IiTTpS7pS7pS7pS7pS7pS7pS7.jpg", overview: "Greed and class discrimination threaten the newly formed symbiotic relationship between the wealthy Park family and the destitute Kim clan." },
+        { title: "Snowpiercer", id: 110415, difficultyMult: 1.25, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "In a future where a failed climate-change experiment has killed all life except for the lucky few who boarded the Snowpiercer, a new class system emerges." },
+        { title: "Memories of Murder", id: 11423, difficultyMult: 1.5, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "In 1986, two small-town detectives struggle with the case of a multiple-murderer who they have no way of identifying." },
+        { title: "The Host", id: 1255, difficultyMult: 1.75, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A monster emerges from Seoul's Han River and begins attacking people." },
+        { title: "Barking Dogs Never Bite", id: 21531, difficultyMult: 2, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "An idle part-time lecturer is annoyed by the barking of a dog in his apartment complex." }
     ],
     "Guillermo del Toro": [
-        { title: "Pan's Labyrinth", id: 1417, difficultyMult: 1 },
-        { title: "Hellboy", id: 456740, difficultyMult: 1.25 },
-        { title: "The Shape of Water", id: 399055, difficultyMult: 1.5 },
-        { title: "Crimson Peak", id: 201085, difficultyMult: 1.75 },
-        { title: "The Devil's Backbone", id: 1433, difficultyMult: 2 }
+        { title: "Pan's Labyrinth", id: 1417, difficultyMult: 1, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "In the Phalangist Spain of 1944, the young stepdaughter of a sadistic army officer escapes into an eerie but captivating fantasy world." },
+        { title: "Hellboy", id: 456740, difficultyMult: 1.25, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A demon, raised from infancy after being conjured by and rescued from the Nazis, grows up to become a defender against the forces of darkness." },
+        { title: "The Shape of Water", id: 399055, difficultyMult: 1.5, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "At a top-secret research facility in the 1960s, a lonely janitor forms a unique relationship with an amphibious creature that is being held in captivity." },
+        { title: "Crimson Peak", id: 201085, difficultyMult: 1.75, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "After a family tragedy, an aspiring author is torn between love for her childhood friend and the temptation of a mysterious outsider." },
+        { title: "The Devil's Backbone", id: 1433, difficultyMult: 2, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "After his father is killed in the Spanish Civil War, ten-year-old Carlos is sent to a remote orphanage where he discovers the school is haunted." }
     ],
     "John Singleton": [
-        { title: "Boyz n the Hood", id: 650, difficultyMult: 1 },
-        { title: "Poetic Justice", id: 8291, difficultyMult: 1.25 },
-        { title: "Baby Boy", id: 16161, difficultyMult: 1.5 },
-        { title: "Higher Learning", id: 16295, difficultyMult: 1.75 },
-        { title: "Rosewood", id: 25624, difficultyMult: 2 }
+        { title: "Boyz n the Hood", id: 650, difficultyMult: 1, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "Follows the lives of three young males living in the Crenshaw ghetto of Los Angeles, dissecting questions of race, relationships, violence, and future prospects." },
+        { title: "Poetic Justice", id: 8291, difficultyMult: 1.25, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A woman grieving for her murdered boyfriend goes on a road trip from South Central L.A. to Oakland." },
+        { title: "Baby Boy", id: 16161, difficultyMult: 1.5, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A young street-smart man with two children from different mothers lives with his mother while struggling to make a life for himself." },
+        { title: "Higher Learning", id: 16295, difficultyMult: 1.75, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "People from all different walks of life, races, and social backgrounds meet at Columbus University." },
+        { title: "Rosewood", id: 25624, difficultyMult: 2, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A dramatization of a 1923 horrific racist lynch mob attack on an African American community." }
     ],
     "Ava DuVernay": [
-        { title: "Selma", id: 273895, difficultyMult: 1 },
-        { title: "13th", id: 13207, difficultyMult: 1.25 },
-        { title: "Middle of Nowhere", id: 19688, difficultyMult: 1.5 },
-        { title: "I Will Follow", id: 72946, difficultyMult: 1.75 },
-        { title: "This is the Life", id: 97399, difficultyMult: 2 }
+        { title: "Selma", id: 273895, difficultyMult: 1, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A chronicle of Dr. Martin Luther King, Jr.'s campaign to secure equal voting rights via an epic march from Selma to Montgomery, Alabama, in 1965." },
+        { title: "13th", id: 13207, difficultyMult: 1.25, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "An in-depth look at the prison system in the United States and how it reveals the nation's history of racial inequality." },
+        { title: "Middle of Nowhere", id: 19688, difficultyMult: 1.5, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "When her husband is sentenced to eight years in prison, Ruby drops out of medical school to focus on his well-being while he's incarcerated." },
+        { title: "I Will Follow", id: 72946, difficultyMult: 1.75, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A chronicle of a woman's life as she moves out of the home she shared with her aunt." },
+        { title: "This is the Life", id: 97399, difficultyMult: 2, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A documentary on the alternative hip-hop scene in Los Angeles during the 1990s." }
     ],
     "Chloe Zhao": [
-        { title: "Nomadland", id: 581734, difficultyMult: 1 },
-        { title: "Eternals", id: 524434, difficultyMult: 1.25 },
-        { title: "The Rider", id: 453278, difficultyMult: 1.5 },
-        { title: "Songs My Brothers Taught Me", id: 308640, difficultyMult: 1.75 },
-        { title: "Daughters", id: 739556, difficultyMult: 2 }
+        { title: "Nomadland", id: 581734, difficultyMult: 1, poster_path: "/66p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A woman in her sixties, after losing everything in the Great Recession, embarks on a journey through the American West, living as a van-dwelling modern-day nomad." },
+        { title: "Eternals", id: 524434, difficultyMult: 1.25, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "The saga of the Eternals, a race of immortal beings who lived on Earth and shaped its history and civilizations." },
+        { title: "The Rider", id: 453278, difficultyMult: 1.5, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "After a riding accident leaves him unable to compete, a young cowboy searches for a new identity and what it means to be a man in the heartland of America." },
+        { title: "Songs My Brothers Taught Me", id: 308640, difficultyMult: 1.75, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A portrait of the modern-day Lakota on the Pine Ridge Indian Reservation." },
+        { title: "Daughters", id: 739556, difficultyMult: 2, poster_path: "/v9p7S7pS7pS7pS7pS7pS7pS7pS7.jpg", overview: "A documentary following four young girls as they prepare for a special Daddy Daughter Dance with their incarcerated fathers." }
     ]
 };
 
@@ -180,6 +180,7 @@ function getFallbackDirectorProfile(name) {
 }
 
 export const TMDB = {
+    CAMPAIGN_DATA,
     isConfigured() {
         return Boolean(TMDB_READ_ACCESS_TOKEN || TMDB_API_KEY);
     },
@@ -217,6 +218,10 @@ export const TMDB = {
             return [];
         }
 
+        // If we already have posters and overviews hardcoded, we can skip the TMDB fetch for speed
+        const hasAllDetails = campaign.every(f => f.poster_path && f.overview);
+        if (hasAllDetails) return campaign;
+
         if (!this.isConfigured()) {
             console.warn("TMDB API Key missing! Returning partial campaign data.");
             return campaign;
@@ -225,13 +230,17 @@ export const TMDB = {
         // Fetch full details for the campaign movies in parallel
         try {
             const movies = await Promise.all(campaign.map(async (movie) => {
+                // Only fetch if data is missing
+                if (movie.poster_path && movie.overview) return movie;
+
                 const data = await tmdbFetch(`/movie/${movie.id}`);
                 return {
                     ...movie,
                     release_date: data.release_date,
                     genre_ids: data.genres ? data.genres.map(g => g.id) : [],
                     poster_path: data.poster_path,
-                    popularity: data.popularity
+                    popularity: data.popularity,
+                    overview: data.overview || movie.overview
                 };
             }));
             return movies;
@@ -273,8 +282,8 @@ export const TMDB = {
     getHardcodedDirectors() {
         const directorPool = [
             {
-                id: 1032,
-                tmdbId: 1032,
+                id: 5026,
+                tmdbId: 5026,
                 portraitKey: 'portrait_akira_kurosawa',
                 portraitFrame: 0,
                 name: 'Akira Kurosawa',

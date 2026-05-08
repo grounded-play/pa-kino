@@ -37,16 +37,18 @@ export const UI = {
         const baseScaleY = element.scaleY;
 
         interactiveTarget.on('pointerover', () => {
+            scene.tweens.killTweensOf(element);
             scene.tweens.add({
                 targets: element,
-                scaleX: baseScaleX * 1.1,
-                scaleY: baseScaleY * 1.1,
-                duration: 400,
-                ease: 'Elastic.easeOut'
+                scaleX: baseScaleX * 1.08,
+                scaleY: baseScaleY * 1.08,
+                duration: 250,
+                ease: 'Back.easeOut'
             });
         });
 
         interactiveTarget.on('pointerout', () => {
+            scene.tweens.killTweensOf(element);
             scene.tweens.add({
                 targets: element,
                 scaleX: baseScaleX,
@@ -56,7 +58,8 @@ export const UI = {
             });
         });
 
-        interactiveTarget.on('pointerdown', () => {
+        interactiveTarget.on('pointerdown', (pointer) => {
+            if (pointer && pointer.event) pointer.event.stopPropagation();
             if (options.beforeClick) {
                 options.beforeClick();
             }
@@ -118,6 +121,8 @@ export const UI = {
      */
     createChunkyButton(scene, x, y, width, height, textStr, onClick, subTextStr = null, options = {}) {
         const container = scene.add.container(x, y);
+        const baseScaleX = container.scaleX;
+        const baseScaleY = container.scaleY;
 
         const graphics = scene.add.graphics();
         const r = 8; // Border radius
@@ -153,29 +158,50 @@ export const UI = {
             container.add(subText);
         }
 
-        const hitPaddingX = options.hitPaddingX ?? 28;
-        const hitPaddingY = options.hitPaddingY ?? 24;
+        const hitPaddingX = options.hitPaddingX ?? 40;
+        const hitPaddingY = options.hitPaddingY ?? 30;
         const hitWidth = width + hitPaddingX;
         const hitHeight = height + 8 + hitPaddingY;
 
         const hitTarget = scene.add.rectangle(x, y + 4, hitWidth, hitHeight, 0xffffff, 0.001);
         hitTarget.setDepth((container.depth || 0) + 1);
-        hitTarget.setInteractive(
-            new Phaser.Geom.Rectangle(
-                -hitWidth / 2,
-                -hitHeight / 2,
-                hitWidth,
-                hitHeight
-            ),
-            Phaser.Geom.Rectangle.Contains
-        );
+        hitTarget.setInteractive({ useHandCursor: true });
         hitTarget.input.cursor = 'pointer';
 
         const syncHitTarget = () => {
-            hitTarget.setPosition(container.x, container.y + 4);
-            hitTarget.setDepth((container.depth || 0) + 1);
+            if (!container || !container.scene) return;
+            const matrix = container.getWorldTransformMatrix();
+            
+            // Decompose matrix to get world scale
+            const worldScaleX = Math.sqrt(matrix.a * matrix.a + matrix.b * matrix.b);
+            const worldScaleY = Math.sqrt(matrix.c * matrix.c + matrix.d * matrix.d);
+
+            hitTarget.setPosition(matrix.tx, matrix.ty + (4 * worldScaleY));
+            hitTarget.setScale(worldScaleX, worldScaleY);
+            
+            // Sync depth with parent container's effective depth
+            let totalDepth = container.depth;
+            let parent = container.parentContainer;
+            while (parent) {
+                totalDepth += parent.depth;
+                parent = parent.parentContainer;
+            }
+            hitTarget.setDepth(totalDepth + 10); // Ensure it's above the parent and any typical backdrops
+            
+            hitTarget.visible = container.visible && container.active && container.alpha > 0;
+            
+            // If parent container is hidden, hide hit target too
+            parent = container.parentContainer;
+            while (parent) {
+                if (!parent.visible || !parent.active || parent.alpha === 0) {
+                    hitTarget.visible = false;
+                    break;
+                }
+                parent = parent.parentContainer;
+            }
         };
 
+        // Sync immediately to avoid one-frame offset
         syncHitTarget();
         scene.events.on('postupdate', syncHitTarget);
         container.once('destroy', () => {
@@ -290,7 +316,12 @@ export const UI = {
         const container = scene.add.container(width / 2, height / 2).setDepth(5000).setVisible(false);
         container.modalState = new Map();
 
-        const bg = scene.add.rectangle(0, 0, width * 2, height * 2, 0x000000, 0.85).setInteractive();
+        // Backdrop added to scene, not container, to avoid hit-test issues
+        const bg = scene.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.85)
+            .setInteractive()
+            .setDepth(4999)
+            .setVisible(false);
+        container.bg = bg;
         const panelWidth = 440;
         const panelHeight = options.showAbandon ? 810 : 710;
         const panel = scene.add.rectangle(0, 0, panelWidth, panelHeight, 0x1a1a1a).setStrokeStyle(4, 0xffaa00);
@@ -418,84 +449,65 @@ export const UI = {
         scene.scale?.on?.('leavefullscreen', updateFullscreenButtonText);
 
         const collectDescendants = (gameObject, out = new Set()) => {
+            if (!gameObject || out.has(gameObject)) return out;
             out.add(gameObject);
-            if (gameObject?.type === 'Container' && Array.isArray(gameObject.list)) {
+            
+            // Follow container children
+            if (gameObject.type === 'Container' && Array.isArray(gameObject.list)) {
                 gameObject.list.forEach((child) => collectDescendants(child, out));
             }
+            
+            // Follow detached hitTargets or background plates linked to this object
+            if (gameObject.hitTarget) collectDescendants(gameObject.hitTarget, out);
+            if (gameObject.bg) collectDescendants(gameObject.bg, out);
+            
             return out;
         };
 
         const setModalState = (isOpen) => {
-            const overlayMembers = collectDescendants(container);
-            const protectedRoots = new Set();
-
-            let ancestor = container.parentContainer;
-            while (ancestor) {
-                protectedRoots.add(ancestor);
-                ancestor = ancestor.parentContainer;
-            }
-
             if (isOpen) {
                 container.modalState.clear();
                 
-                // We need to recursively disable input on everything NOT in the overlay
-                const allSceneObjects = [];
-                scene.children.list.forEach(child => {
-                    const descendants = collectDescendants(child);
-                    descendants.forEach(d => allSceneObjects.push(d));
-                });
+                // Identify which objects to skip (the modal and all its interactive parts)
+                const overlayMembers = collectDescendants(container);
+                if (bg) overlayMembers.add(bg);
 
-                allSceneObjects.forEach((gameObject) => {
-                    if (!gameObject || overlayMembers.has(gameObject) || protectedRoots.has(gameObject)) {
+                scene.children.list.forEach((gameObject) => {
+                    if (!gameObject || overlayMembers.has(gameObject)) {
                         return;
                     }
 
-                    // Store state
-                    const state = {
-                        alpha: gameObject.alpha,
-                        inputEnabled: gameObject.input ? gameObject.input.enabled : false,
-                        hasInput: !!gameObject.input
-                    };
-                    container.modalState.set(gameObject, state);
-
-                    // Disable input
-                    if (gameObject.input) {
+                    // Only disable top-level interactive objects
+                    if (gameObject.input && gameObject.input.enabled) {
+                        container.modalState.set(gameObject, { 
+                            alpha: gameObject.alpha,
+                            depth: gameObject.depth
+                        });
                         gameObject.input.enabled = false;
-                    }
-
-                    // Dim visually (Only top-level or objects with no parent container to avoid double-dimming)
-                    // Actually, Phaser alpha is multiplicative, so dimming the top-level container is enough.
-                    // But we'll dim everything that isn't a child of another scene object being dimmed.
-                    if (scene.children.list.includes(gameObject)) {
                         gameObject.setAlpha(Math.min(gameObject.alpha, 0.3));
                     }
                 });
                 return;
             }
 
-            container.modalState.forEach((previousState, gameObject) => {
-                if (!gameObject || !gameObject.scene) {
-                    return;
-                }
-
-                // Restore alpha only for top-level to avoid multiplicative mess
-                if (scene.children.list.includes(gameObject)) {
-                    gameObject.setAlpha(previousState.alpha);
-                }
-                
-                if (gameObject.input && previousState.hasInput) {
-                    gameObject.input.enabled = previousState.inputEnabled;
+            // Restore state for only the objects we disabled
+            container.modalState.forEach((state, gameObject) => {
+                if (gameObject && gameObject.scene) {
+                    gameObject.input.enabled = true;
+                    gameObject.setAlpha(state.alpha);
                 }
             });
             container.modalState.clear();
         };
 
         container.openModal = () => {
-            setModalState(true);
+            bg.setVisible(true);
             container.setVisible(true);
+            setModalState(true);
         };
 
         container.closeModal = () => {
+            bg.setVisible(false);
             container.setVisible(false);
             setModalState(false);
         };
@@ -506,7 +518,6 @@ export const UI = {
         });
 
         container.add([
-            bg,
             panel,
             title,
             ...masterElements,
