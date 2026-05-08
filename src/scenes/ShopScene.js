@@ -91,32 +91,29 @@ export default class ShopScene extends Phaser.Scene {
         borders.lineBetween(margin + boardWidth, margin, margin + boardWidth, margin + safeHeight);
         borders.setDepth(6);
 
-        this.add.text(margin + boardWidth / 2, margin + 45, 'PRE-PRODUCTION STORE', {
+        const storeTitleY = margin + 45;
+        this.add.text(margin + boardWidth / 2, storeTitleY, 'PRE-PRODUCTION STORE', {
             fontSize: '44px', fontFamily: '"VT323", monospace', color: '#ffcc00', align: 'center'
         }).setOrigin(0.5, 0).setDepth(10);
 
-        this.budgetLabel = this.add.text(margin + boardWidth / 2, margin + 95, `BUDGET AVAILABLE: ${GameState.formatMillions(run.score)}`, {
-            fontSize: '32px', fontFamily: '"VT323", monospace', color: '#66f2ff'
-        }).setOrigin(0.5, 0).setDepth(10);
-
-        // ── Board area: stacked upgrade cards ────────────────────────────
-        const cardWidth = 580;
-        const cardHeight = 85;
-        const cardGap = 10;
-        const startY = margin + 140;
+        // ── Board area: taller upgrade cards ────────────────────────────
+        const cardWidth = 620;
+        const cardHeight = 90; 
+        const cardGap = 15;
+        const startY = margin + 160;
 
         this.offeredUpgrades.forEach((upgrade, index) => {
             const y = startY + index * (cardHeight + cardGap);
             const container = this.add.container(margin + boardWidth / 2, y);
             const bg = this.add.rectangle(0, 0, cardWidth, cardHeight, 0x1a1a1a).setStrokeStyle(2, 0x444444);
-            const title = this.add.text(-cardWidth / 2 + 20, -cardHeight / 2 + 18, upgrade.title.toUpperCase(), {
-                fontSize: '20px', fontFamily: '"VT323", monospace', color: '#ffcc00'
+            const title = this.add.text(-cardWidth / 2 + 25, -cardHeight / 2 + 20, upgrade.title.toUpperCase(), {
+                fontSize: '22px', fontFamily: '"VT323", monospace', color: '#ffcc00'
             });
-            const desc = this.add.text(-cardWidth / 2 + 20, 8, upgrade.desc, {
-                fontSize: '16px', fontFamily: '"VT323", monospace', color: '#aaaaaa',
-                wordWrap: { width: cardWidth - 220 }
+            const desc = this.add.text(-cardWidth / 2 + 25, 10, upgrade.desc, {
+                fontSize: '18px', fontFamily: '"VT323", monospace', color: '#aaaaaa',
+                wordWrap: { width: cardWidth - 250 }
             });
-            const costBtn = UI.createChunkyButton(this, cardWidth / 2 - 100, 0, 160, 42,
+            const costBtn = UI.createChunkyButton(this, cardWidth / 2 - 110, 0, 180, 52,
                 GameState.formatMillions(upgrade.cost), () => this.purchaseUpgrade(upgrade, container));
             
             container.add([bg, title, desc, costBtn]);
@@ -124,10 +121,17 @@ export default class ShopScene extends Phaser.Scene {
             container.setDepth(10);
         });
 
-        // ── Board area: Director & Premiere (Stacked properly) ──────────────────
-        const directorY = margin + 510; // Moved up slightly to clear results
-        const portraitW = 160;
-        const portraitH = 220;
+        const budgetY = 560;
+        const budgetBg = this.add.rectangle(margin + boardWidth / 2, budgetY, 400, 48, 0x002233, 0.8)
+            .setStrokeStyle(2, 0x66f2ff).setDepth(10);
+        this.budgetLabel = this.add.text(margin + boardWidth / 2, budgetY, `BUDGET AVAILABLE: ${GameState.formatMillions(run.score)}`, {
+            fontSize: '32px', fontFamily: '"VT323", monospace', color: '#66f2ff', fontWeight: 'bold'
+        }).setOrigin(0.5).setDepth(11);
+
+        // ── Board area: Director & Premiere (Lowered for breathing room) ──
+        const directorY = 740; 
+        const portraitW = 150;
+        const portraitH = 210;
         const frameX = margin + boardWidth / 2;
 
         const portraitCard = this.add.rectangle(frameX, directorY, portraitW + 30, portraitH + 40, 0x20150b, 1)
@@ -144,7 +148,7 @@ export default class ShopScene extends Phaser.Scene {
         }
 
         // Blue Box (Dialogue)
-        const blueBoxY = directorY + 160;
+        const blueBoxY = 940;
         const blueBoxW = 640;
         const blueBox = this.add.rectangle(frameX, blueBoxY, blueBoxW, 90, 0x003366, 0.95)
             .setStrokeStyle(3, 0x66ccff).setDepth(10);
@@ -161,7 +165,7 @@ export default class ShopScene extends Phaser.Scene {
         }).setOrigin(0.5).setDepth(11);
 
         // ── Board area: Review & Details ──────────────────────────────────────────
-        const reviewY = blueBoxY + 185;
+        const reviewY = 1120;
         const completedFilm = run.completedFilms[run.completedFilms.length - 1] || null;
         const currentPosterKey = completedFilm?.id ? `poster_${completedFilm.id}` : null;
         
@@ -177,7 +181,7 @@ export default class ShopScene extends Phaser.Scene {
 
         // Critic Rating Centered below poster
         const ratingY = reviewY + posterH / 2 + 40;
-        this.add.text(posterX, ratingY, `CRITIC RATING: ${rating10.toFixed(1)} / 10`, {
+        this.add.text(posterX, ratingY, `CRITIC RATING: ${rating10.toFixed(1)} / 10.0`, {
             fontSize: '28px', fontFamily: '"VT323", monospace', color: '#ffcc00'
         }).setOrigin(0.5).setDepth(11);
 
@@ -200,8 +204,43 @@ export default class ShopScene extends Phaser.Scene {
             dy += 28;
         });
 
-        // Next Filming Button
-        const nextBtn = UI.createChunkyButton(this, frameX, height - 90, 320, 56, 'NEXT FILMING >', () => {
+        // ── Board area: Upcoming Feature Preview ─────────────────────────────────
+        const upcomingFilm = run.filmography?.[run.currentFilmIndex];
+        if (upcomingFilm) {
+            const upNextY = 1420; // Pushed down past review
+            this.add.text(frameX, upNextY, 'COMING SOON', {
+                fontSize: '22px', fontFamily: '"VT323", monospace', color: '#66f2ff'
+            }).setOrigin(0.5).setDepth(11);
+            
+            const nextPosterKey = `poster_${upcomingFilm.id}`;
+            const nextPosterW = 160;
+            const nextPosterH = 240;
+            if (this.textures.exists(nextPosterKey)) {
+                this.add.image(frameX - 220, upNextY + 120, nextPosterKey).setDisplaySize(nextPosterW, nextPosterH).setDepth(11);
+            } else {
+                this.add.rectangle(frameX - 220, upNextY + 120, nextPosterW, nextPosterH, 0x111111).setStrokeStyle(1, 0x333333).setDepth(11);
+            }
+            
+            const levelInfo = TMDB.getLevelDataFromFilm(upcomingFilm);
+            const details = [
+                `TITLE: ${upcomingFilm.title.toUpperCase()}`,
+                `EXPECTED REELS: ${levelInfo.expectedReels}`,
+                `TARGET SCORE: ${GameState.formatMillions(levelInfo.targetScore)}`,
+                `ENSEMBLE SLOTS: 3`
+            ];
+            
+            details.forEach((line, i) => {
+                this.add.text(frameX - 120, upNextY + 40 + (i * 32), line, {
+                    fontSize: i === 0 ? '28px' : '20px', 
+                    fontFamily: '"VT323", monospace', 
+                    color: i === 0 ? '#ffffff' : '#aaaaaa',
+                    wordWrap: { width: 440 }
+                }).setOrigin(0, 0).setDepth(11);
+            });
+        }
+
+        // Next Filming Button (Moved up slightly from very bottom)
+        const nextBtn = UI.createChunkyButton(this, frameX, height - 140, 420, 80, 'NEXT FILMING >', () => {
             this.scene.start('PachinkoScene');
         }).setDepth(10);
 
@@ -333,23 +372,89 @@ export default class ShopScene extends Phaser.Scene {
         const safeHeight = height - 120;
         sidebar.add(this.add.rectangle(sidebarWidth / 2, safeHeight / 2, sidebarWidth, safeHeight, 0x0d0d0d, 1));
         
-        let sy = 120; // Lowered to clear settings button
-        sidebar.add(this.add.text(sidebarWidth / 2, sy, 'RUN SUMMARY', {
+        let sy = 130; // Lowered more for breathing room
+        const summaryTitle = this.add.text(sidebarWidth / 2, sy, 'RUN SUMMARY', {
             fontSize: '32px', fontFamily: '"VT323", monospace', color: '#ffaa00'
-        }).setOrigin(0.5, 0));
-        sy += 65;
+        }).setOrigin(0.5, 0);
+        sidebar.add(summaryTitle);
+
+        // Underline
+        const underline = this.add.graphics();
+        underline.lineStyle(2, 0xffaa00, 0.6);
+        underline.lineBetween(sidebarWidth / 2 - 80, sy + 38, sidebarWidth / 2 + 80, sy + 38);
+        sidebar.add(underline);
+
+        sy += 75;
 
         const statRows = [
-            { label: 'TOTAL FILMS', value: `${run.currentFilmIndex}/${run.filmography.length}` },
+            { label: 'TOTAL FILMS', value: `${run.currentFilmIndex}/${run.filmography?.length || 5}` },
+            { label: 'LAST FILM NET', value: GameState.formatMillions(run.lastNetRoundScore || 0) },
             { label: 'LIFETIME BOX', value: GameState.formatMillions(run.score) },
-            { label: 'REELS USED', value: run.reelDrops }
+            { label: 'TOTAL REELS', value: run.totalReelsDropped || run.reelDrops || 0 }
         ];
 
         statRows.forEach(row => {
-            sidebar.add(this.add.text(pad, sy, row.label, { fontSize: '24px', fontFamily: '"VT323", monospace', color: '#666666' }));
-            sidebar.add(this.add.text(sidebarWidth - pad, sy, row.value, { fontSize: '24px', fontFamily: '"VT323", monospace', color: '#cccccc', align: 'right' }).setOrigin(1, 0));
-            sy += 35;
+            sidebar.add(this.add.text(pad, sy, row.label, { fontSize: '22px', fontFamily: '"VT323", monospace', color: '#666666' }));
+            sidebar.add(this.add.text(sidebarWidth - pad, sy, row.value, { fontSize: '22px', fontFamily: '"VT323", monospace', color: '#cccccc', align: 'right' }).setOrigin(1, 0));
+            sy += 30;
         });
+
+        sy += 40;
+
+        // ── Filmography History (Vertical List) ──────────────────────────────────
+        sidebar.add(this.add.text(sidebarWidth / 2, sy, 'PRODUCTION HISTORY', {
+            fontSize: '18px', fontFamily: '"VT323", monospace', color: '#444444'
+        }).setOrigin(0.5, 0));
+        sy += 30;
+
+        const rowH = 80;
+        const thumbW = 40;
+        const thumbH = 60;
+
+        const unlockedGallery = new Set(GameState.persistentGallery.map(f => f.id));
+
+        for (let i = 0; i < 5; i++) {
+            const film = run.filmography?.[i];
+            const isCompleted = i < run.currentFilmIndex;
+            const isCurrent = i === run.currentFilmIndex;
+            const isUnlocked = film && (isCompleted || unlockedGallery.has(film.id));
+            const rowY = sy + i * (rowH + 6);
+            
+            // Background row (Portrait Rectangle look)
+            sidebar.add(this.add.rectangle(sidebarWidth / 2, rowY + rowH / 2, sidebarWidth - pad * 2, rowH, 0x1a1a1a).setStrokeStyle(1, 0x333333));
+            
+            if (film) {
+                const posterKey = `poster_${film.id}`;
+                if (isUnlocked && this.textures.exists(posterKey)) {
+                    const poster = this.add.image(pad + 30, rowY + rowH / 2, posterKey);
+                    poster.setDisplaySize(thumbW, thumbH);
+                    sidebar.add(poster);
+                } else {
+                    // Placeholder for current/future
+                    const placeholder = this.add.rectangle(pad + 30, rowY + rowH / 2, thumbW, thumbH, 0x000000).setStrokeStyle(1, 0x444444);
+                    sidebar.add(placeholder);
+                    sidebar.add(this.add.text(pad + 30, rowY + rowH / 2, isCurrent ? '!' : '?', {
+                        fontSize: '20px', fontFamily: '"VT323", monospace', color: isCurrent ? '#ffaa00' : '#444444'
+                    }).setOrigin(0.5));
+                }
+
+                const titleText = isUnlocked || isCurrent ? film.title.toUpperCase() : 'LOCKED';
+                const titleColor = isCurrent ? '#ffaa00' : (isCompleted ? '#ffffff' : '#666666');
+
+                sidebar.add(this.add.text(pad + 60, rowY + 15, titleText, {
+                    fontSize: '15px', fontFamily: '"VT323", monospace', color: titleColor,
+                    wordWrap: { width: sidebarWidth - pad * 2 - 100 }
+                }));
+
+                if (isCompleted) {
+                    const savedFilm = run.completedFilms.find(f => f.id === film.id);
+                    const score = savedFilm?.rating || 0;
+                    sidebar.add(this.add.text(sidebarWidth - pad - 10, rowY + rowH / 2, `${score.toFixed(1)}`, {
+                        fontSize: '22px', fontFamily: '"VT323", monospace', color: '#66ff88'
+                    }).setOrigin(1, 0.5));
+                }
+            }
+        }
     }
 
     _resolveDirectorPortraitFrame(run) {
