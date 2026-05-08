@@ -137,24 +137,24 @@ export default class BootScene extends Phaser.Scene {
         const directors = TMDB.getHardcodedDirectors();
         const campaignData = TMDB.CAMPAIGN_DATA;
         const tmdbBaseUrl = 'https://image.tmdb.org/t/p/w500';
-        
+
         directors.forEach(director => {
             const films = campaignData[director.name] || [];
             films.forEach(film => {
                 if (film.poster_path) {
                     const posterKey = `poster_${film.id}`;
-                    
+
                     // Skip broken placeholders and obviously invalid strings
-                    const isInvalid = film.poster_path.includes('v9p7S7') || 
-                                     film.poster_path.includes('p7S7pS7') || 
-                                     film.poster_path.includes('s8S8S8') ||
-                                     film.poster_path.includes('65D2aE0j');
-                    
+                    const isInvalid = film.poster_path.includes('v9p7S7') ||
+                        film.poster_path.includes('p7S7pS7') ||
+                        film.poster_path.includes('s8S8S8') ||
+                        film.poster_path.includes('65D2aE0j');
+
                     if (!isInvalid) {
                         const fullUrl = film.poster_path.startsWith('http')
                             ? film.poster_path
                             : `${tmdbBaseUrl}${film.poster_path}`;
-                            
+
                         this.load.image(posterKey, fullUrl);
                     }
                 }
@@ -387,7 +387,7 @@ export default class BootScene extends Phaser.Scene {
 
         const size = 64;
         const graphics = this.make.graphics({ x: 0, y: 0, add: false });
-        
+
         // Base rock shape
         graphics.fillStyle(0x555555, 1);
         graphics.beginPath();

@@ -64,7 +64,6 @@ export default class MenuScene extends Phaser.Scene {
             label: 'menu_bumper'
         });
         this.titleLogo = this.bgScene.matter.add.image(width / 2, -300, 'tcc_logo', null, {
-            isSensor: true,
             restitution: 0.7,
             friction: 0.03,
             frictionAir: 0.002,
@@ -72,21 +71,46 @@ export default class MenuScene extends Phaser.Scene {
             label: 'menu_logo',
             collisionFilter: {
                 category: this.bgScene.CAT_LOGO,
-                mask: 0 // Logo ignores everything
+                mask: 0xFFFFFFFF
             }
         });
         this.titleLogo.setOrigin(0.5);
-        this.logoScale = 240 / this.titleLogo.width;
+        this.logoScale = 180 / this.titleLogo.width;
         this.titleLogo.setScale(this.logoScale);
         this.titleLogo.setDepth(95);
         this.titleLogo.setAngularVelocity(Phaser.Math.FloatBetween(-0.15, 0.15));
         this.titleLogo.setVelocity(
             Phaser.Math.FloatBetween(-3, 3),
-            Phaser.Math.FloatBetween(6, 12) // Faster drop
+            Phaser.Math.FloatBetween(6, 12)
         );
+        this.titleLogo.setInteractive({ useHandCursor: true });
+        this.titleLogo.on('pointerdown', () => {
+            this.aboutOverlay?.openModal();
+        });
+        this.titleLogo.on('pointerover', () => {
+            this.tweens.killTweensOf(this.titleLogo);
+            this.tweens.add({
+                targets: this.titleLogo,
+                scaleX: this.logoScale * 1.04,
+                scaleY: this.logoScale * 1.04,
+                duration: 180,
+                ease: 'Sine.easeOut'
+            });
+        });
+        this.titleLogo.on('pointerout', () => {
+            this.tweens.killTweensOf(this.titleLogo);
+            this.tweens.add({
+                targets: this.titleLogo,
+                scaleX: this.logoScale,
+                scaleY: this.logoScale,
+                duration: 180,
+                ease: 'Sine.easeOut'
+            });
+        });
 
         this.setupMenuImpactListener();
         this.buildRunMemoryPanel(width, height);
+        this.buildAboutOverlay(width, height);
         this.createAudioSettings(width, height);
 
         this.startBtnContainer = UI.createChunkyButton(this, width / 2, -220, 340, 92, 'NEW RUN', () => {
@@ -100,11 +124,20 @@ export default class MenuScene extends Phaser.Scene {
         this.uiContainer.add([this.startBtnContainer, this.memoryBtnContainer]);
         this.startBtnContainer.setAlpha(0);
         this.memoryBtnContainer.setAlpha(0);
-        
-        // Add physics to buttons in the Background world
-        this.bgScene.matter.add.gameObject(this.startBtnContainer, { restitution: 0.6, friction: 0.1 }).setFixedRotation();
-        this.bgScene.matter.add.gameObject(this.memoryBtnContainer, { restitution: 0.6, friction: 0.1 }).setFixedRotation();
-        
+
+        this.startButtonVisualBody = this.bgScene.matter.add.gameObject(this.startBtnContainer, {
+            restitution: 0.72,
+            friction: 0.02,
+            frictionAir: 0.015,
+            density: 0.0015
+        }).setFixedRotation();
+        this.memoryButtonVisualBody = this.bgScene.matter.add.gameObject(this.memoryBtnContainer, {
+            restitution: 0.72,
+            friction: 0.02,
+            frictionAir: 0.015,
+            density: 0.0015
+        }).setFixedRotation();
+
         this.setButtonEnabled(this.startBtnContainer, false);
         this.setButtonEnabled(this.memoryBtnContainer, false);
 
@@ -115,6 +148,10 @@ export default class MenuScene extends Phaser.Scene {
             if (this.menuImpactHandler && this.bgScene && this.bgScene.matter && this.bgScene.matter.world) {
                 this.bgScene.matter.world.off('collisionstart', this.menuImpactHandler);
             }
+            this.startButtonVisualBody = null;
+            this.memoryButtonVisualBody = null;
+            this.titleLogo?.removeAllListeners();
+            this.titleLogo?.destroy();
         });
     }
 
@@ -143,22 +180,22 @@ export default class MenuScene extends Phaser.Scene {
 
     cleanupMenuWorldBodies() {
         if (this.startButtonBody) {
-            this.matter.world.remove(this.startButtonBody);
+            this.bgScene?.matter?.world?.remove(this.startButtonBody);
             this.startButtonBody = null;
         }
 
         if (this.memoryButtonBody) {
-            this.matter.world.remove(this.memoryButtonBody);
+            this.bgScene?.matter?.world?.remove(this.memoryButtonBody);
             this.memoryButtonBody = null;
         }
 
         if (this.startButtonSpacer) {
-            this.matter.world.remove(this.startButtonSpacer);
+            this.bgScene?.matter?.world?.remove(this.startButtonSpacer);
             this.startButtonSpacer = null;
         }
 
         if (this.memoryButtonSpacer) {
-            this.matter.world.remove(this.memoryButtonSpacer);
+            this.bgScene?.matter?.world?.remove(this.memoryButtonSpacer);
             this.memoryButtonSpacer = null;
         }
     }
@@ -211,7 +248,6 @@ export default class MenuScene extends Phaser.Scene {
                 if (hitTitle && hitLanding) {
                     this.hasMenuImpact = true;
                     this.cameras.main.shake(150, 0.01);
-                    this.playMenuIntroSequence();
                     return;
                 }
             }
@@ -228,7 +264,6 @@ export default class MenuScene extends Phaser.Scene {
         this.menuIntroStarted = true;
         const settings = GameState.getAudioSettings(this);
         const bgm = this.sound.get('bgm');
-
         if (!this.sound.mute && this.cache.audio.exists('sfx_title')) {
             this.sound.play('sfx_title', { volume: 0.9 * (settings.sfxVolume ?? 1) });
         }
@@ -303,6 +338,15 @@ export default class MenuScene extends Phaser.Scene {
         this.setButtonEnabled(this.startBtnContainer, true);
         this.setButtonEnabled(this.memoryBtnContainer, true);
 
+        if (this.startButtonVisualBody) {
+            this.startButtonVisualBody.setVelocity(Phaser.Math.FloatBetween(-1.2, 1.2), Phaser.Math.FloatBetween(0.8, 2.2));
+            this.startButtonVisualBody.setAngularVelocity(Phaser.Math.FloatBetween(-0.01, 0.01));
+        }
+        if (this.memoryButtonVisualBody) {
+            this.memoryButtonVisualBody.setVelocity(Phaser.Math.FloatBetween(-1.2, 1.2), Phaser.Math.FloatBetween(0.8, 2.2));
+            this.memoryButtonVisualBody.setAngularVelocity(Phaser.Math.FloatBetween(-0.01, 0.01));
+        }
+
         this.tweens.add({
             targets: this.startBtnContainer,
             alpha: 1,
@@ -318,7 +362,10 @@ export default class MenuScene extends Phaser.Scene {
             duration: 550, // Faster
             delay: 100,
             ease: 'Cubic.easeOut',
-            onComplete: () => this.createButtonPhysicsBodies(height)
+            onComplete: () => {
+                this.createButtonPhysicsBodies(height);
+                this.syncMenuButtonBodies(height);
+            }
         });
     }
 
@@ -328,7 +375,7 @@ export default class MenuScene extends Phaser.Scene {
         const centerX = this.scale.width / 2;
 
         if (!this.startButtonBody) {
-            this.startButtonBody = this.matter.add.rectangle(centerX, startY, 340, 92, {
+            this.startButtonBody = this.bgScene.matter.add.rectangle(centerX, startY, 340, 92, {
                 isStatic: true,
                 restitution: 0.95,
                 friction: 0,
@@ -336,11 +383,11 @@ export default class MenuScene extends Phaser.Scene {
                 label: 'menu_button'
             });
         } else {
-            this.matter.body.setPosition(this.startButtonBody, { x: centerX, y: startY });
+            this.bgScene.matter.body.setPosition(this.startButtonBody, { x: centerX, y: startY });
         }
 
         if (!this.memoryButtonBody) {
-            this.memoryButtonBody = this.matter.add.rectangle(centerX, memoryY, 280, 76, {
+            this.memoryButtonBody = this.bgScene.matter.add.rectangle(centerX, memoryY, 280, 76, {
                 isStatic: true,
                 restitution: 0.95,
                 friction: 0,
@@ -348,11 +395,11 @@ export default class MenuScene extends Phaser.Scene {
                 label: 'menu_button'
             });
         } else {
-            this.matter.body.setPosition(this.memoryButtonBody, { x: centerX, y: memoryY });
+            this.bgScene.matter.body.setPosition(this.memoryButtonBody, { x: centerX, y: memoryY });
         }
 
         if (!this.startButtonSpacer) {
-            this.startButtonSpacer = this.matter.add.rectangle(centerX, startY + 56, 430, 14, {
+            this.startButtonSpacer = this.bgScene.matter.add.rectangle(centerX, startY + 56, 430, 14, {
                 isStatic: true,
                 restitution: 0.98,
                 friction: 0,
@@ -361,11 +408,11 @@ export default class MenuScene extends Phaser.Scene {
                 render: { visible: false }
             });
         } else {
-            this.matter.body.setPosition(this.startButtonSpacer, { x: centerX, y: startY + 56 });
+            this.bgScene.matter.body.setPosition(this.startButtonSpacer, { x: centerX, y: startY + 56 });
         }
 
         if (!this.memoryButtonSpacer) {
-            this.memoryButtonSpacer = this.matter.add.rectangle(centerX, memoryY - 48, 360, 14, {
+            this.memoryButtonSpacer = this.bgScene.matter.add.rectangle(centerX, memoryY - 48, 360, 14, {
                 isStatic: true,
                 restitution: 0.98,
                 friction: 0,
@@ -374,7 +421,23 @@ export default class MenuScene extends Phaser.Scene {
                 render: { visible: false }
             });
         } else {
-            this.matter.body.setPosition(this.memoryButtonSpacer, { x: centerX, y: memoryY - 48 });
+            this.bgScene.matter.body.setPosition(this.memoryButtonSpacer, { x: centerX, y: memoryY - 48 });
+        }
+    }
+
+    syncMenuButtonBodies(height) {
+        const startY = height * 0.66;
+        const memoryY = height * 0.66 + 110;
+        const centerX = this.scale.width / 2;
+
+        if (this.startButtonVisualBody?.body) {
+            this.bgScene.matter.body.setPosition(this.startButtonVisualBody.body, { x: centerX, y: startY - 120 });
+            this.bgScene.matter.body.setVelocity(this.startButtonVisualBody.body, { x: Phaser.Math.FloatBetween(-0.8, 0.8), y: 1.8 });
+        }
+
+        if (this.memoryButtonVisualBody?.body) {
+            this.bgScene.matter.body.setPosition(this.memoryButtonVisualBody.body, { x: centerX, y: memoryY - 140 });
+            this.bgScene.matter.body.setVelocity(this.memoryButtonVisualBody.body, { x: Phaser.Math.FloatBetween(-0.8, 0.8), y: 2.1 });
         }
     }
 
@@ -518,7 +581,8 @@ export default class MenuScene extends Phaser.Scene {
 
     createAudioSettings(width, height) {
         this.settingsOverlay = UI.createSettingsOverlay(this);
-        this.settingsBtn = UI.createSettingsButton(this, width - 140, 140, () => {
+        const { x, y } = UI.getSettingsButtonPosition(this);
+        this.settingsBtn = UI.createSettingsButton(this, x, y, () => {
             const settings = GameState.getAudioSettings(this);
             if (!this.sound.mute && this.cache.audio.exists('sfx_gear')) {
                 this.sound.play('sfx_gear', { volume: 0.8 * (settings.sfxVolume ?? 1) });
@@ -527,6 +591,59 @@ export default class MenuScene extends Phaser.Scene {
         });
 
         this.uiContainer.add(this.settingsBtn);
+    }
+
+    buildAboutOverlay(width, height) {
+        const container = this.add.container(width / 2, height / 2).setDepth(4600).setVisible(false);
+        const backdrop = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.86)
+            .setInteractive()
+            .setDepth(4599)
+            .setVisible(false);
+
+        const panel = this.add.rectangle(0, 0, 620, 540, 0x120b06).setStrokeStyle(4, 0xffaa00);
+        const title = this.add.text(0, -220, 'ABOUT THE DEV', {
+            fontSize: '38px',
+            fontFamily: '"VT323", monospace',
+            color: '#ffcc00'
+        }).setOrigin(0.5);
+
+        const body = this.add.text(0, -70,
+            'Tuesday Cinema Games Presents:\n' +
+            'a Grounded Play github hosted\n' +
+            '-pakino- by Government Name of the Tuesday Cinema Club', {
+                fontSize: '28px',
+                fontFamily: '"VT323", monospace',
+                color: '#f0e4c8',
+                align: 'center',
+                lineSpacing: 10
+            }).setOrigin(0.5);
+
+        const linkLabel = this.add.text(0, 90, 'LINK:', {
+            fontSize: '24px',
+            fontFamily: '"VT323", monospace',
+            color: '#66f2ff'
+        }).setOrigin(0.5);
+
+        const linkBtn = UI.createChunkyButton(this, 0, 150, 430, 70, 'TUESDAY CINEMA CLUB', () => {
+            window.open('https://linktr.ee/Tuesday_Cinema_Club', '_blank', 'noopener,noreferrer');
+        }, 'OPEN LINKTR.EE');
+
+        const closeBtn = UI.createChunkyButton(this, 0, 238, 220, 60, 'CLOSE', () => {
+            container.closeModal();
+        });
+
+        container.add([panel, title, body, linkLabel, linkBtn, closeBtn]);
+        container.bg = backdrop;
+        container.openModal = () => {
+            backdrop.setVisible(true);
+            container.setVisible(true);
+        };
+        container.closeModal = () => {
+            backdrop.setVisible(false);
+            container.setVisible(false);
+        };
+        backdrop.on('pointerdown', () => container.closeModal());
+        this.aboutOverlay = container;
     }
 
     buildDirectorMemoryCards() {

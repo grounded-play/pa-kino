@@ -1,6 +1,13 @@
 import { GameState } from '../GameState.js';
 
 export const UI = {
+    supportsHoverInput() {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+            return true;
+        }
+        return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    },
+
     /**
      * Applies squishy physics-like interactions to a button (Phaser Game Object or Container).
      * @param {Phaser.Scene} scene - The scene
@@ -36,27 +43,29 @@ export const UI = {
         const baseScaleX = element.scaleX;
         const baseScaleY = element.scaleY;
 
-        interactiveTarget.on('pointerover', () => {
-            scene.tweens.killTweensOf(element);
-            scene.tweens.add({
-                targets: element,
-                scaleX: baseScaleX * 1.08,
-                scaleY: baseScaleY * 1.08,
-                duration: 250,
-                ease: 'Back.easeOut'
+        if (this.supportsHoverInput()) {
+            interactiveTarget.on('pointerover', () => {
+                scene.tweens.killTweensOf(element);
+                scene.tweens.add({
+                    targets: element,
+                    scaleX: baseScaleX * 1.08,
+                    scaleY: baseScaleY * 1.08,
+                    duration: 250,
+                    ease: 'Back.easeOut'
+                });
             });
-        });
 
-        interactiveTarget.on('pointerout', () => {
-            scene.tweens.killTweensOf(element);
-            scene.tweens.add({
-                targets: element,
-                scaleX: baseScaleX,
-                scaleY: baseScaleY,
-                duration: 200,
-                ease: 'Sine.easeOut'
+            interactiveTarget.on('pointerout', () => {
+                scene.tweens.killTweensOf(element);
+                scene.tweens.add({
+                    targets: element,
+                    scaleX: baseScaleX,
+                    scaleY: baseScaleY,
+                    duration: 200,
+                    ease: 'Sine.easeOut'
+                });
             });
-        });
+        }
 
         interactiveTarget.on('pointerdown', (pointer) => {
             if (pointer && pointer.event) pointer.event.stopPropagation();
@@ -91,6 +100,16 @@ export const UI = {
                 scaleY: baseScaleY,
                 duration: 300,
                 ease: 'Elastic.easeOut'
+            });
+        });
+
+        interactiveTarget.on('pointerupoutside', () => {
+            scene.tweens.add({
+                targets: element,
+                scaleX: baseScaleX,
+                scaleY: baseScaleY,
+                duration: 220,
+                ease: 'Sine.easeOut'
             });
         });
     },
@@ -289,6 +308,22 @@ export const UI = {
 
         container.add([track, progress, handle]);
         return container;
+    },
+
+    /**
+     * Returns the shared settings button position in screen coordinates.
+     */
+    getSettingsButtonPosition(scene) {
+        const { width } = scene.scale;
+        return { x: width - 140, y: 140 };
+    },
+
+    /**
+     * Returns the shared settings button position relative to a parent container.
+     */
+    getSettingsButtonPositionInContainer(scene, containerX = 0, containerY = 0) {
+        const { x, y } = this.getSettingsButtonPosition(scene);
+        return { x: x - containerX, y: y - containerY };
     },
 
     /**

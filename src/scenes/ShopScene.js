@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GameState, MAX_RUN_BUDGET } from '../GameState.js';
 import { UI } from '../utils/UI.js';
+import { TMDB } from '../utils/TMDB.js';
 
 const DIALOGUE = {
     blockbuster: [
@@ -171,16 +172,21 @@ export default class ShopScene extends Phaser.Scene {
             }
         });
 
-        const settingsBtn = UI.createSettingsButton(this, sidebarWidth - 50, 80, () => {
+        const settingsPosition = UI.getSettingsButtonPositionInContainer(this, margin + boardWidth, margin);
+        const settingsBtn = UI.createSettingsButton(this, settingsPosition.x, settingsPosition.y, () => {
             if (!this.sound.mute && this.cache.audio.exists('sfx_gear')) {
                 this.sound.play('sfx_gear', { volume: 0.8 * (GameState.getAudioSettings(this).sfxVolume ?? 1) });
             }
             settingsOverlay.openModal();
         });
-        sidebar.add(settingsBtn);
-        settingsBtn.setDepth(2000);
 
         this._buildRunRecap(sidebar, run, nextFilm, nextPosterKey, sidebarWidth, innerSidebarW, pad);
+
+        sidebar.add(settingsBtn);
+        if (typeof sidebar.bringToTop === 'function') {
+            sidebar.bringToTop(settingsBtn);
+        }
+        settingsBtn.setDepth(2000);
 
         // Ambient sound
         if (!this.sound.mute && this.cache.audio.exists('sfx_oscar')) {
@@ -222,19 +228,19 @@ export default class ShopScene extends Phaser.Scene {
         const safeHeight = height - 120;
         sidebar.add(this.add.rectangle(sidebarWidth / 2, safeHeight / 2, sidebarWidth, safeHeight, 0x0d0d0d, 1));
 
-        let sy = 130; // Clear of settings button
+        let sy = 178;
 
         // ── Header ───────────────────────────────────────────────────────────────
         sidebar.add(this.add.text(sidebarWidth / 2, sy, 'PRODUCTION WRAP', {
-            fontSize: '24px', fontFamily: '"VT323", monospace', color: '#ffaa00', align: 'center'
+            fontSize: '30px', fontFamily: '"VT323", monospace', color: '#ffaa00', align: 'center'
         }).setOrigin(0.5, 0));
-        sy += 34;
+        sy += 42;
 
         sidebar.add(this._divider(pad, sy, sidebarWidth - pad));
         sy += 14;
 
         // ── Rating Stamp ─────────────────────────────────────────────────────────
-        const stampH = 72;
+        const stampH = 84;
         const stampW = sidebarWidth - pad * 2;
         const stampG = this.add.graphics();
         stampG.fillStyle(rating.bg, 1);
@@ -245,7 +251,7 @@ export default class ShopScene extends Phaser.Scene {
         stampG.strokeRect(pad + 4, sy + 4, stampW - 8, stampH - 8);
         sidebar.add(stampG);
 
-        const ratingFs = rating.label.length > 11 ? '24px' : '32px';
+        const ratingFs = rating.label.length > 11 ? '28px' : '38px';
         sidebar.add(this.add.text(sidebarWidth / 2, sy + stampH / 2, rating.label, {
             fontSize: ratingFs, fontFamily: '"VT323", monospace', color: rating.color, align: 'center'
         }).setOrigin(0.5));
@@ -257,12 +263,13 @@ export default class ShopScene extends Phaser.Scene {
         // ── Stat Block ────────────────────────────────────────────────────────────
         const statRows = [
             { label: 'TARGET', value: GameState.formatMillions(run.lastTargetScore || 0), color: '#aaaaaa' },
-            { label: 'EARNED', value: GameState.formatMillions(run.lastRoundScore || 0), color: ratio >= 1.0 ? '#66ff88' : '#ff7777' },
-            { label: 'BUDGET', value: GameState.formatMillions(run.score || 0), color: '#8cff98' },
+            { label: 'GROSS', value: GameState.formatMillions(run.lastGrossRoundScore || run.lastRoundScore || 0), color: '#66f2ff' },
+            { label: 'COSTS', value: GameState.formatMillions(run.lastProductionCost || 0), color: '#ff9c7a' },
+            { label: 'NET', value: GameState.formatMillions(run.lastNetRoundScore || run.lastRoundScore || 0), color: ratio >= 1.0 ? '#66ff88' : '#ff7777' },
             { label: 'FILMS',  value: `${filmsCompleted}/${totalFilms}`, color: '#ffffff' }
         ];
 
-        const statBoxH = statRows.length * 26 + 16;
+        const statBoxH = statRows.length * 32 + 18;
         const statBoxG = this.add.graphics();
         statBoxG.fillStyle(0x0f0f0f, 1);
         statBoxG.fillRect(pad, sy, sidebarWidth - pad * 2, statBoxH);
@@ -273,60 +280,22 @@ export default class ShopScene extends Phaser.Scene {
         sy += 8;
         statRows.forEach(row => {
             sidebar.add(this.add.text(pad + 8, sy, row.label, {
-                fontSize: '20px', fontFamily: '"VT323", monospace', color: '#666666'
+                fontSize: '24px', fontFamily: '"VT323", monospace', color: '#666666'
             }).setOrigin(0, 0));
             sidebar.add(this.add.text(sidebarWidth - pad - 8, sy, row.value, {
-                fontSize: '20px', fontFamily: '"VT323", monospace', color: row.color, align: 'right'
+                fontSize: '24px', fontFamily: '"VT323", monospace', color: row.color, align: 'right'
             }).setOrigin(1, 0));
-            sy += 26;
+            sy += 32;
         });
-        sy += 10;
+        sy += 20;
 
         sidebar.add(this._divider(pad, sy, sidebarWidth - pad));
-        sy += 14;
+        sy += 18;
 
-        // ── Director's Desk ───────────────────────────────────────────────────────
-        const portraitAspect = 286 / 204;
-        const avatarW = Math.min(80, Math.floor(innerSidebarW * 0.38));
-        const avatarH = Math.round(avatarW * portraitAspect);
-        const avatarX = pad + avatarW / 2;
-        const avatarY = sy + avatarH / 2;
-
-        const hasPortraits = this.textures.exists('director_portraits');
-        if (hasPortraits) {
-            const portrait = this.add.sprite(avatarX, avatarY, 'director_portraits');
-            portrait.setFrame(run.directorPortraitFrame ?? 0);
-            portrait.setDisplaySize(avatarW, avatarH);
-            const pfG = this.add.graphics();
-            pfG.lineStyle(2, 0xffaa00, 0.8);
-            pfG.strokeRect(pad, sy, avatarW, avatarH);
-            sidebar.add(pfG);
-            sidebar.add(portrait);
-        } else {
-            const ph = this.add.rectangle(avatarX, avatarY, avatarW, avatarH, 0x222222)
-                .setStrokeStyle(2, 0x555555);
-            sidebar.add(ph);
-        }
-
-        const nameX = pad + avatarW + 10;
-        const nameW = sidebarWidth - nameX - pad;
-        sidebar.add(this.add.text(nameX, sy + 4, (run.directorName || 'UNKNOWN').toUpperCase(), {
-            fontSize: '17px', fontFamily: '"VT323", monospace', color: '#ffaa00',
-            wordWrap: { width: nameW }
-        }).setOrigin(0, 0));
-
-        const traitLine = run.traitLines?.[0] || '';
-        if (traitLine) {
-            sidebar.add(this.add.text(nameX, sy + 26, traitLine, {
-                fontSize: '14px', fontFamily: '"VT323", monospace', color: '#666666',
-                wordWrap: { width: nameW }
-            }).setOrigin(0, 0));
-        }
-
-        // Speech bubble below portrait
-        const bubbleY = sy + avatarH + 10;
+        // Speech bubble
+        const bubbleY = sy;
         const bubbleTxt = this.add.text(sidebarWidth / 2, bubbleY + 8, `"${dialogue}"`, {
-            fontSize: '18px', fontFamily: '"VT323", monospace', color: '#dddddd', align: 'center',
+            fontSize: '22px', fontFamily: '"VT323", monospace', color: '#dddddd', align: 'center',
             wordWrap: { width: innerSidebarW - 16 }
         }).setOrigin(0.5, 0);
 
@@ -339,7 +308,7 @@ export default class ShopScene extends Phaser.Scene {
 
         sidebar.add(bubbleG);
         sidebar.add(bubbleTxt);
-        sy = bubbleY + bubbleH + 14;
+        sy = bubbleY + bubbleH + 18;
 
         // ── Suggestion ────────────────────────────────────────────────────────────
         if (suggestion) {
@@ -347,60 +316,148 @@ export default class ShopScene extends Phaser.Scene {
             sy += 12;
 
             sidebar.add(this.add.text(sidebarWidth / 2, sy, 'DIRECTOR SUGGESTS', {
-                fontSize: '16px', fontFamily: '"VT323", monospace', color: '#888888', align: 'center'
+                fontSize: '20px', fontFamily: '"VT323", monospace', color: '#888888', align: 'center'
             }).setOrigin(0.5, 0));
-            sy += 22;
+            sy += 26;
 
             const sgG = this.add.graphics();
             sgG.fillStyle(0x181818, 1);
-            sgG.fillRect(pad, sy, innerSidebarW, 50);
+            sgG.fillRect(pad, sy, innerSidebarW, 66);
             sgG.lineStyle(1, 0x444444, 1);
-            sgG.strokeRect(pad, sy, innerSidebarW, 50);
+            sgG.strokeRect(pad, sy, innerSidebarW, 66);
             sgG.lineStyle(3, rating.border, 0.6);
-            sgG.lineBetween(pad, sy, pad, sy + 50);
+            sgG.lineBetween(pad, sy, pad, sy + 66);
             sidebar.add(sgG);
 
             sidebar.add(this.add.text(pad + 10, sy + 6, suggestion.title, {
-                fontSize: '19px', fontFamily: '"VT323", monospace', color: rating.color
+                fontSize: '22px', fontFamily: '"VT323", monospace', color: rating.color
             }).setOrigin(0, 0));
             sidebar.add(this.add.text(pad + 10, sy + 27, suggestion.desc, {
-                fontSize: '14px', fontFamily: '"VT323", monospace', color: '#777777',
+                fontSize: '17px', fontFamily: '"VT323", monospace', color: '#777777',
                 wordWrap: { width: innerSidebarW - 16 }
             }).setOrigin(0, 0));
-            sy += 62;
+            sy += 84;
         }
 
         // ── Next Feature ──────────────────────────────────────────────────────────
         if (nextFilm) {
             sidebar.add(this._divider(pad, sy, sidebarWidth - pad));
-            sy += 12;
+            sy += 16;
 
             sidebar.add(this.add.text(sidebarWidth / 2, sy, 'NEXT FEATURE', {
-                fontSize: '18px', fontFamily: '"VT323", monospace', color: '#66f2ff', align: 'center'
+                fontSize: '22px', fontFamily: '"VT323", monospace', color: '#66f2ff', align: 'center'
             }).setOrigin(0.5, 0));
-            sy += 26;
+            sy += 38;
 
-            const posterH = Math.min(130, Math.floor(innerSidebarW * 0.7));
+            const posterW = innerSidebarW - 8;
+            const posterH = Math.min(324, Math.round(posterW * 1.5));
             const posterFrame = this.add.rectangle(sidebarWidth / 2, sy + posterH / 2, innerSidebarW, posterH, 0x0a0a0a)
                 .setStrokeStyle(2, 0x445566);
             sidebar.add(posterFrame);
 
             if (nextPosterKey && this.textures.exists(nextPosterKey)) {
                 const poster = this.add.image(sidebarWidth / 2, sy + posterH / 2, nextPosterKey);
-                poster.setDisplaySize(innerSidebarW - 6, posterH - 6);
+                this._fitImageWithin(poster, posterW, posterH - 10);
                 sidebar.add(poster);
             } else {
                 sidebar.add(this.add.text(sidebarWidth / 2, sy + posterH / 2, 'COMING SOON', {
-                    fontSize: '18px', fontFamily: '"VT323", monospace', color: '#333333', align: 'center'
+                    fontSize: '22px', fontFamily: '"VT323", monospace', color: '#333333', align: 'center'
                 }).setOrigin(0.5));
             }
-            sy += posterH + 8;
+            sy += posterH + 14;
 
             sidebar.add(this.add.text(sidebarWidth / 2, sy, (nextFilm.title || '').toUpperCase(), {
-                fontSize: '17px', fontFamily: '"VT323", monospace', color: '#cccccc', align: 'center',
+                fontSize: '21px', fontFamily: '"VT323", monospace', color: '#cccccc', align: 'center',
                 wordWrap: { width: innerSidebarW }
             }).setOrigin(0.5, 0));
+            sy += 58;
         }
+
+        const directorSectionY = Math.max(sy + 12, safeHeight - 282);
+        sidebar.add(this._divider(pad, directorSectionY, sidebarWidth - pad));
+        sidebar.add(this.add.text(sidebarWidth / 2, directorSectionY + 16, 'DIRECTOR', {
+            fontSize: '20px',
+            fontFamily: '"VT323", monospace',
+            color: '#888888',
+            align: 'center'
+        }).setOrigin(0.5, 0));
+
+        const portraitCardY = directorSectionY + 134;
+        const portraitCard = this.add.rectangle(sidebarWidth / 2, portraitCardY, 178, 236, 0x20150b, 1)
+            .setStrokeStyle(3, 0xffd27a);
+        const portraitMatte = this.add.rectangle(sidebarWidth / 2, portraitCardY - 10, 146, 186, 0x111111, 1)
+            .setStrokeStyle(2, 0xffaa00);
+        sidebar.add([portraitCard, portraitMatte]);
+
+        this._addDirectorPortrait(sidebar, run, sidebarWidth / 2, portraitCardY - 10, 138, 178, -18);
+
+        sidebar.add(this.add.text(sidebarWidth / 2, portraitCardY + 94, (run.directorName || 'UNKNOWN').toUpperCase(), {
+            fontSize: '24px',
+            fontFamily: '"VT323", monospace',
+            color: '#ffaa00',
+            align: 'center',
+            wordWrap: { width: innerSidebarW - 20 }
+        }).setOrigin(0.5, 0.5));
+
+        const traitLine = run.traitLines?.[0] || '';
+        if (traitLine) {
+            sidebar.add(this.add.text(sidebarWidth / 2, portraitCardY + 122, traitLine, {
+                fontSize: '18px',
+                fontFamily: '"VT323", monospace',
+                color: '#aaaaaa',
+                align: 'center',
+                wordWrap: { width: innerSidebarW - 20 }
+            }).setOrigin(0.5, 0.5));
+        }
+    }
+
+    _resolveDirectorPortraitFrame(run) {
+        if (!this.textures.exists('director_portraits')) {
+            return run.directorPortraitFrame ?? 0;
+        }
+
+        const texture = this.textures.get('director_portraits');
+        const portraitToken = this._resolveDirectorPortraitToken(run);
+        if (texture.has(portraitToken)) {
+            return portraitToken;
+        }
+
+        const numericFrame = run.directorPortraitFrame ?? 0;
+        return texture.has(numericFrame) ? numericFrame : 0;
+    }
+
+    _resolveDirectorPortraitToken(run) {
+        const candidates = [
+            run.directorPortraitKey,
+            run.directorPortraitFrame
+        ];
+        const hardcodedMatch = TMDB.getHardcodedDirectors().find((director) => {
+            return director.id === run.directorId || director.name === run.directorName;
+        });
+        if (hardcodedMatch) {
+            candidates.push(hardcodedMatch.portraitKey, hardcodedMatch.portraitFrame);
+        }
+        return candidates.find((candidate) => candidate !== undefined && candidate !== null) ?? 0;
+    }
+
+    _addDirectorPortrait(sidebar, run, x, y, width, height, imageOffsetY = 0) {
+        if (!this.textures.exists('director_portraits')) {
+            sidebar.add(this.add.rectangle(x, y, width, height, 0x222222).setStrokeStyle(2, 0x555555));
+            return;
+        }
+
+        const frameToken = this._resolveDirectorPortraitFrame(run);
+        const portrait = this.add.sprite(x, y + imageOffsetY, 'director_portraits');
+        portrait.setTexture('director_portraits', frameToken);
+        portrait.setDisplaySize(width, height);
+        sidebar.add(portrait);
+    }
+
+    _fitImageWithin(image, maxWidth, maxHeight) {
+        const textureWidth = image.width || image.frame?.width || maxWidth;
+        const textureHeight = image.height || image.frame?.height || maxHeight;
+        const scale = Math.min(maxWidth / textureWidth, maxHeight / textureHeight);
+        image.setDisplaySize(textureWidth * scale, textureHeight * scale);
     }
 
     _divider(x1, y, x2) {

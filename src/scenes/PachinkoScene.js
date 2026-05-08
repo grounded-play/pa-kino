@@ -31,6 +31,50 @@ export default class PachinkoScene extends Phaser.Scene {
         this.rotatingBouncers = [];
         this.ballEaters = [];
         this.pendingRoundWin = false;
+        this.backgroundPlatformMirrors = new Map();
+        this.levelReelsDropped = 0;
+        this.nextBallId = 1;
+        this.readyToWrap = false;
+    }
+
+    clampCurrentScore(nextScore = this.currentScore) {
+        const maxScore = Math.max(0, MAX_RUN_BUDGET - this.runScoreBase);
+        const safeScore = Math.max(0, Number(nextScore) || 0);
+        this.currentScore = Math.min(safeScore, maxScore);
+        this.syncRunEconomy();
+        return this.currentScore;
+    }
+
+    getCurrentProductionCost(reelsDropped = this.levelReelsDropped) {
+        const baseCost = this.levelData?.productionBaseCost || 0;
+        const extraCost = this.levelData?.extraReelCost || 0;
+        const expectedReels = this.levelData?.expectedReels || 1;
+        const reelsOver = Math.max(0, reelsDropped - expectedReels);
+        return baseCost + (reelsOver * extraCost);
+    }
+
+    getCurrentNetScore() {
+        return Math.max(0, this.currentScore - this.getCurrentProductionCost());
+    }
+
+    syncRunEconomy() {
+        const productionCost = this.getCurrentProductionCost();
+        const netRoundScore = this.getCurrentNetScore();
+        GameState.currentRun.productionCosts = productionCost;
+        GameState.currentRun.score = Math.min(this.runScoreBase + netRoundScore, MAX_RUN_BUDGET);
+        return netRoundScore;
+    }
+
+    getBallCurrentPotential(ball) {
+        const maxBucket = this.maxBucketScore || 500;
+        const multiplier = Math.max(1, Number(ball?.scoreMultiplier) || 1);
+        const oscarMult = ball?.isOscarBall ? 2.5 : 1;
+        return Math.max(0, Math.round((ball?.pendingValue || 0) + (maxBucket * multiplier * oscarMult)));
+    }
+
+    getReelLifetimeMs() {
+        const levelIndex = GameState.currentRun.currentFilmIndex || 0;
+        return Math.max(10000, 30000 - (levelIndex * 2500));
     }
 
     init(data = {}) {
@@ -78,6 +122,7 @@ export default class PachinkoScene extends Phaser.Scene {
         // but each level's win condition measures only what is earned THIS level.
         this.runScoreBase = Number(GameState.currentRun.score || 0);
         this.currentScore = 0;
+        this.levelReelsDropped = 0;
     }
 
     preload() {
@@ -102,9 +147,9 @@ export default class PachinkoScene extends Phaser.Scene {
 
     create() {
         const { width, height } = this.scale;
-        console.log('Display Size:', this.scale.displaySize);
         this.bgScene = this.scene.get('BackgroundScene');
         this.bgScene?.setClickRipplesEnabled(false);
+        this.bgScene?.setBallsVisible(false);
 
         if (this.invalidRunData) {
             this.add.rectangle(0, 0, width, height, 0x000000, 0.92).setOrigin(0, 0);
@@ -171,6 +216,14 @@ export default class PachinkoScene extends Phaser.Scene {
 
         this.events.once('shutdown', () => {
             this.bgScene?.setClickRipplesEnabled(true);
+            this.bgScene?.setBallsVisible(true);
+            const matterWorld = this.matter?.world;
+            this.backgroundPlatformMirrors.forEach(({ body }) => {
+                if (matterWorld && body) {
+                    matterWorld.remove(body);
+                }
+            });
+            this.backgroundPlatformMirrors.clear();
         });
     }
 
@@ -198,6 +251,68 @@ export default class PachinkoScene extends Phaser.Scene {
         
         // Ensure Matter.js world bounds are strictly clamped to the visible board area
         this.matter.world.setBounds(bezel, bezel, this.boardWidth - bezel, this.boardHeight - bezel);
+    }
+
+    syncBackgroundPlatforms() {
+        if (!this.bgScene?.boxes) {
+            return;
+        }
+
+        const activeKeys = new Set();
+        const marginX = this.margin;
+        const marginY = this.margin;
+        const boardLeft = marginX;
+        const boardTop = marginY;
+        const boardRight = marginX + this.boardWidth;
+        const boardBottom = marginY + this.boardHeight;
+        const halfWidth = this.bgScene.cubeHalfWidth;
+        const halfHeight = this.bgScene.cubeHalfHeight;
+
+        this.bgScene.boxes.forEach((box) => {
+            const screenX = box.x + halfWidth;
+            const screenY = box.y + halfHeight;
+            if (screenX < boardLeft - halfWidth || screenX > boardRight + halfWidth || screenY < boardTop - halfHeight || screenY > boardBottom + halfHeight) {
+                return;
+            }
+
+            const key = String(box.body?.id || `${screenX}:${screenY}`);
+            activeKeys.add(key);
+            const localX = screenX - marginX;
+            const localY = screenY - marginY;
+
+            let mirror = this.backgroundPlatformMirrors.get(key);
+            if (!mirror) {
+                const body = this.matter.add.fromVertices(
+                    localX,
+                    localY,
+                    [
+                        { x: 0, y: -halfHeight },
+                        { x: halfWidth, y: 0 },
+                        { x: 0, y: halfHeight },
+                        { x: -halfWidth, y: 0 }
+                    ],
+                    {
+                        isStatic: true,
+                        friction: 0,
+                        frictionStatic: 0,
+                        restitution: 0.95,
+                        label: 'bg_platform'
+                    }
+                );
+                mirror = { body };
+                this.backgroundPlatformMirrors.set(key, mirror);
+            } else {
+                this.matter.body.setPosition(mirror.body, { x: localX, y: localY });
+            }
+        });
+
+        [...this.backgroundPlatformMirrors.entries()].forEach(([key, mirror]) => {
+            if (activeKeys.has(key)) {
+                return;
+            }
+            this.matter.world.remove(mirror.body);
+            this.backgroundPlatformMirrors.delete(key);
+        });
     }
 
     createOrganicLayout() {
@@ -284,7 +399,7 @@ export default class PachinkoScene extends Phaser.Scene {
     }
 
     setupFunnel() {
-        this.funnel = this.add.triangle(this.boardWidth / 2, 80, 0, 0, 60, 0, 30, 40, 0xff0000).setOrigin(0.5);
+        this.funnel = this.add.triangle(this.boardWidth / 2, 80, 0, 0, 60, 0, 30, 40, 0xff8800).setOrigin(0.5);
         this.boardContainer.add(this.funnel);
 
         if (this.directorModifiers.funnelSpeedStatic) {
@@ -310,6 +425,7 @@ export default class PachinkoScene extends Phaser.Scene {
         const bucketHeight = 120;
         const bucketY = this.boardHeight - (bucketHeight / 2);
         const bucketScores = [100, 250, 500, 250, 100];
+        this.maxBucketScore = Math.max(...bucketScores);
         const bucketColors = [0x4a4a4a, 0x6a6a6a, 0x8a8a8a, 0x6a6a6a, 0x4a4a4a];
         const startX = margin + ((usableWidth - ((spacing * (numBuckets - 1)) + bucketWidth)) / 2) + (bucketWidth / 2);
 
@@ -355,24 +471,40 @@ export default class PachinkoScene extends Phaser.Scene {
     }
 
     createSafetySystems() {
-        const eaterY = this.boardHeight - 210;
-        [this.boardWidth * 0.28, this.boardWidth * 0.72].forEach((x) => {
-            const visual = this.add.circle(x, eaterY, 34, 0x771111).setStrokeStyle(4, 0xff4444).setDepth(12);
-            const xMark = this.add.text(x, eaterY, 'X', {
-                fontSize: '44px',
+        const levelIndex = GameState.currentRun.currentFilmIndex;
+        const stealerCount = Math.max(0, levelIndex);
+        const orbitCenterX = this.boardWidth / 2;
+        const orbitCenterY = this.boardHeight * 0.56;
+        const orbitBaseRadius = Math.min(this.boardWidth * 0.24, 170);
+
+        for (let index = 0; index < stealerCount; index++) {
+            const orbitAngle = (Math.PI * 2 * index) / stealerCount;
+            const orbitRadiusX = orbitBaseRadius + ((index % 2) * 18);
+            const orbitRadiusY = orbitRadiusX * 0.7;
+            const eaterX = orbitCenterX + Math.cos(orbitAngle) * orbitRadiusX;
+            const eaterY = orbitCenterY + Math.sin(orbitAngle) * orbitRadiusY;
+            const visual = this.add.circle(eaterX, eaterY, 24, 0x771111).setStrokeStyle(4, 0xff4444).setDepth(12);
+            const xMark = this.add.text(eaterX, eaterY, 'X', {
+                fontSize: '34px',
                 fontFamily: '"VT323", monospace',
                 color: '#ffd7d7'
             }).setOrigin(0.5).setDepth(13);
             this.boardContainer.add([visual, xMark]);
-            const body = this.matter.add.circle(x, eaterY, 34, {
+            const body = this.matter.add.circle(eaterX, eaterY, 24, {
                 isStatic: true,
                 isSensor: true,
                 label: 'ball_eater'
             });
             body.visual = visual;
             body.labelText = xMark;
+            body.orbitCenterX = orbitCenterX;
+            body.orbitCenterY = orbitCenterY;
+            body.orbitRadiusX = orbitRadiusX;
+            body.orbitRadiusY = orbitRadiusY;
+            body.orbitAngle = orbitAngle;
+            body.orbitSpeed = 0.005 + (index * 0.0009);
             this.ballEaters.push(body);
-        });
+        }
 
         const gutterHeight = 36;
         const gutterY = this.boardHeight - 18;
@@ -419,23 +551,39 @@ export default class PachinkoScene extends Phaser.Scene {
         const sidebarMask = maskShape.createGeometryMask();
         this.sidebar.setMask(sidebarMask);
 
-        let currentY = 130; // Leave room for settings button at top-right
+        let currentY = 128;
 
         this.createSidebarAudioControls();
 
-        this.posterFrame = this.add.rectangle(sidebarWidth / 2, currentY + 120, innerWidth, 240, 0x111111, 1)
+        this.sidebar.add(this.add.text(sidebarWidth / 2, currentY, 'CURRENT FEATURE', {
+            fontSize: '22px',
+            fontFamily: '"VT323", monospace',
+            color: '#ffaa00',
+            align: 'center'
+        }).setOrigin(0.5, 0));
+        currentY += 30;
+
+        const sectionDivider = this.add.graphics();
+        sectionDivider.lineStyle(1, 0x444444, 0.8);
+        sectionDivider.lineBetween(padding, currentY, sidebarWidth - padding, currentY);
+        this.sidebar.add(sectionDivider);
+        currentY += 16;
+
+        const posterHeight = Math.min(334, Math.round((innerWidth - 20) * 1.42));
+        const posterCenterY = currentY + posterHeight / 2;
+        this.posterFrame = this.add.rectangle(sidebarWidth / 2, posterCenterY, innerWidth, posterHeight, 0x111111, 1)
             .setStrokeStyle(3, 0xffaa00);
         this.sidebar.add(this.posterFrame);
 
         if (this.textures.exists(this.currentPosterKey)) {
-            this.posterImage = this.add.image(sidebarWidth / 2, currentY + 120, this.currentPosterKey).setOrigin(0.5);
-            this.posterImage.setDisplaySize(innerWidth - 16, 220);
+            this.posterImage = this.add.image(sidebarWidth / 2, posterCenterY, this.currentPosterKey).setOrigin(0.5);
+            this.posterImage.setDisplaySize(innerWidth - 14, posterHeight - 14);
             this.posterImage.setAlpha(0.96);
             this.sidebar.add(this.posterImage);
         } else {
-            const posterFallback = this.add.rectangle(sidebarWidth / 2, currentY + 120, innerWidth - 16, 220, 0x333333, 1)
+            const posterFallback = this.add.rectangle(sidebarWidth / 2, posterCenterY, innerWidth - 16, posterHeight - 16, 0x333333, 1)
                 .setStrokeStyle(2, 0x666666);
-            const posterFallbackText = this.add.text(sidebarWidth / 2, currentY + 120, 'POSTER\nUNAVAILABLE', {
+            const posterFallbackText = this.add.text(sidebarWidth / 2, posterCenterY, 'POSTER\nUNAVAILABLE', {
                 fontSize: '28px',
                 fontFamily: '"VT323", monospace',
                 color: '#888888',
@@ -443,121 +591,254 @@ export default class PachinkoScene extends Phaser.Scene {
             }).setOrigin(0.5);
             this.sidebar.add([posterFallback, posterFallbackText]);
         }
-        currentY += 262;
+        currentY += posterHeight + 14;
 
-        // Director Name
-        this.directorNameText = this.add.text(sidebarWidth / 2, currentY, this.directorData.name.toUpperCase(), {
-            fontSize: '28px',
+        this.featureTitleText = this.add.text(sidebarWidth / 2, currentY, (this.rawFilmData?.title || 'UNTITLED FEATURE').toUpperCase(), {
+            fontSize: '24px',
             fontFamily: '"VT323", monospace',
             color: '#ffffff',
             align: 'center',
             wordWrap: { width: innerWidth }
         }).setOrigin(0.5, 0);
-        this.sidebar.add(this.directorNameText);
-        currentY += this.directorNameText.height + 10;
+        this.sidebar.add(this.featureTitleText);
+        currentY += this.featureTitleText.height + 12;
 
-        // Trait Box
-        const traitBox = this.add.rectangle(sidebarWidth / 2, currentY + 18, innerWidth, 36, 0x1e1e1e, 1)
+        const directorCardHeight = 128;
+        const directorCard = this.add.rectangle(sidebarWidth / 2, currentY + directorCardHeight / 2, innerWidth, directorCardHeight, 0x111111, 1)
+            .setStrokeStyle(2, 0xffaa00, 0.6);
+        this.sidebar.add(directorCard);
+
+        const directorTextCenterX = sidebarWidth / 2;
+        this.sidebar.add(this.add.text(directorTextCenterX, currentY + 14, 'DIRECTOR', {
+            fontSize: '18px',
+            fontFamily: '"VT323", monospace',
+            color: '#666666',
+            align: 'center'
+        }).setOrigin(0.5, 0));
+
+        this.directorNameText = this.add.text(directorTextCenterX, currentY + 34, this.directorData.name.toUpperCase(), {
+            fontSize: '26px',
+            fontFamily: '"VT323", monospace',
+            color: '#ffffff',
+            align: 'center',
+            wordWrap: { width: innerWidth - 24 }
+        }).setOrigin(0.5, 0);
+        this.sidebar.add(this.directorNameText);
+
+        this.directorFlavorText = this.add.text(directorTextCenterX, currentY + 64, this.directorData.cinematicFact || 'Every director bends the set to their own strange rhythm.', {
+            fontSize: '15px',
+            fontFamily: '"VT323", monospace',
+            color: '#a7a7a7',
+            align: 'center',
+            wordWrap: { width: innerWidth - 40 }
+        }).setOrigin(0.5, 0);
+        this.sidebar.add(this.directorFlavorText);
+
+        const traitBox = this.add.rectangle(directorTextCenterX, currentY + 108, innerWidth - 44, 32, 0x1e1e1e, 1)
             .setStrokeStyle(1, 0xffaa00, 0.6);
         this.sidebar.add(traitBox);
         const traitTextStr = this.directorData.traitLines?.[0] || 'STANDARD PRODUCTION';
-        this.traitText = this.add.text(sidebarWidth / 2, currentY + 18, traitTextStr, {
-            fontSize: '19px',
+        this.traitText = this.add.text(directorTextCenterX, currentY + 108, traitTextStr, {
+            fontSize: '17px',
             fontFamily: '"VT323", monospace',
             color: '#ffaa00',
             align: 'center',
-            wordWrap: { width: innerWidth - 16 }
+            wordWrap: { width: innerWidth - 56 }
         }).setOrigin(0.5);
         this.sidebar.add(this.traitText);
-        currentY += 48;
+        currentY += directorCardHeight + 14;
 
-        // Budget / Score HUD
-        const statsBox = this.add.rectangle(sidebarWidth / 2, currentY + 52, innerWidth, 106, 0x0f0f0f, 1)
+        const statsBoxHeight = 338;
+        const statsBox = this.add.rectangle(sidebarWidth / 2, currentY + statsBoxHeight / 2, innerWidth, statsBoxHeight, 0x0f0f0f, 1)
             .setStrokeStyle(2, 0xffaa00, 0.55)
             .setOrigin(0.5);
-        const barX = sidebarWidth - padding - 10;
-        this.ratingHUD = this.add.text(padding + 8, currentY + 8, 'GOAL: 0%', {
+        this.sidebar.add(this.add.text(padding + 8, currentY + 8, 'PRODUCTION VALUES', {
+            fontSize: '18px',
+            fontFamily: '"VT323", monospace',
+            color: '#666666'
+        }).setOrigin(0, 0));
+        this.productionCostLabel = this.add.text(padding + 8, currentY + 34, 'COSTS: $0M', {
+            fontSize: '21px',
+            fontFamily: '"VT323", monospace',
+            color: '#ff9c7a'
+        }).setOrigin(0, 0);
+        this.netBudgetLabel = this.add.text(padding + 8, currentY + 62, 'NET: $0M', {
+            fontSize: '24px',
+            fontFamily: '"VT323", monospace',
+            color: '#66ff88'
+        }).setOrigin(0, 0);
+        this.ratingHUD = this.add.text(padding + 8, currentY + 92, 'GOAL: 0%', {
             fontSize: '22px',
             fontFamily: '"VT323", monospace',
             color: '#f5c518'
         }).setOrigin(0, 0);
-        this.scoreLabel = this.add.text(padding + 8, currentY + 40, 'BUDGET: $0.0M', {
-            fontSize: '22px',
+        this.scoreLabel = this.add.text(padding + 8, currentY + 120, 'LANDED: $0.0M', {
+            fontSize: '20px',
             fontFamily: '"VT323", monospace',
             color: '#8cff98'
         }).setOrigin(0, 0);
-        this.ballLabel = this.add.text(padding + 8, currentY + 72, 'REELS: 10', {
+        this.ballLabel = this.add.text(padding + 8, currentY + 148, 'REELS: 10', {
             fontSize: '22px',
             fontFamily: '"VT323", monospace',
             color: '#ffd2d2'
         }).setOrigin(0, 0);
-        this.progressFrame = this.add.rectangle(barX, currentY + 52, 14, 96, 0x060606, 1)
+        this.droppedLabel = this.add.text(padding + 8, currentY + 176, 'DROPPED: 0', {
+            fontSize: '22px',
+            fontFamily: '"VT323", monospace',
+            color: '#ffe08a'
+        }).setOrigin(0, 0);
+        this.expectedReelsLabel = this.add.text(padding + 8, currentY + 204, 'PLAN: 5 REELS', {
+            fontSize: '22px',
+            fontFamily: '"VT323", monospace',
+            color: '#ffaa00'
+        }).setOrigin(0, 0);
+        this.padInventoryLabel = this.add.text(padding + 8, currentY + 232, 'PADS: 0 READY', {
+            fontSize: '22px',
+            fontFamily: '"VT323", monospace',
+            color: '#66f2ff'
+        }).setOrigin(0, 0);
+        this.liveTakeValueLabel = this.add.text(padding + 8, currentY + 260, 'LIVE TAKE: $0M', {
+            fontSize: '20px',
+            fontFamily: '"VT323", monospace',
+            color: '#66f2ff',
+            wordWrap: { width: innerWidth - 24 }
+        }).setOrigin(0, 0);
+        this.projectionLabel = this.add.text(padding + 8, currentY + 286, 'LANDED + POSSIBLE: $0M / 0%', {
+            fontSize: '19px',
+            fontFamily: '"VT323", monospace',
+            color: '#f5c518',
+            wordWrap: { width: innerWidth - 24 }
+        }).setOrigin(0, 0);
+        this.activeReelValuesText = this.add.text(padding + 8, currentY + 312, 'REELS LIVE: none', {
+            fontSize: '15px',
+            fontFamily: '"VT323", monospace',
+            color: '#aaaaaa',
+            wordWrap: { width: innerWidth - 24 }
+        }).setOrigin(0, 0);
+        const budgetBarWidth = innerWidth - 26;
+        const budgetBarHeight = 28;
+        const budgetBarY = currentY + 370;
+        this.progressFrame = this.add.rectangle(sidebarWidth / 2, budgetBarY, budgetBarWidth, budgetBarHeight, 0x060606, 1)
             .setStrokeStyle(2, 0xffaa00);
-        this.progressFill = this.add.rectangle(barX, currentY + 52 + 48, 6, 0, 0x66f2ff, 1).setOrigin(0.5, 1);
-        this.sidebar.add([statsBox, this.ratingHUD, this.scoreLabel, this.ballLabel, this.progressFrame, this.progressFill]);
-        currentY += 118;
+        this.progressFill = this.add.rectangle(
+            sidebarWidth / 2 - (budgetBarWidth / 2) + 4,
+            budgetBarY,
+            0,
+            budgetBarHeight - 8,
+            0x66f2ff,
+            1
+        ).setOrigin(0, 0.5);
+        this.sidebar.add([statsBox, this.productionCostLabel, this.netBudgetLabel, this.ratingHUD, this.scoreLabel, this.ballLabel, this.droppedLabel, this.expectedReelsLabel, this.padInventoryLabel, this.liveTakeValueLabel, this.projectionLabel, this.activeReelValuesText, this.progressFrame, this.progressFill]);
+        currentY += statsBoxHeight + 16;
 
-        this.padModeButton = UI.createChunkyButton(this, sidebarWidth / 2, currentY + 30, sidebarWidth - 36, 58, 'PLACE PADS', () => {
+        this.padModeButton = UI.createChunkyButton(this, sidebarWidth / 2, currentY + 28, sidebarWidth - 36, 56, 'PLACE PADS', () => {
             this.togglePadMode();
-        });
+        }, 'TACTICAL SETUP');
         this.sidebar.add(this.padModeButton);
-        currentY += 80;
+        currentY += 72;
+
+        this.wrapButton = UI.createChunkyButton(this, sidebarWidth / 2, currentY + 24, sidebarWidth - 56, 48, 'SELL EXTRAS', () => {
+            this.handleSellExtras();
+        }, 'WRAP THE SHOOT');
+        this.sidebar.add(this.wrapButton);
+        this.wrapButton.setAlpha(0.45);
+        this.wrapButton.disableInteractive?.();
+        currentY += 56;
 
         this.lockStatusText = this.add.text(sidebarWidth / 2, currentY, '', {
-            fontSize: '20px',
+            fontSize: '18px',
             fontFamily: '"VT323", monospace',
             color: '#ffef9a',
             align: 'center',
             wordWrap: { width: innerWidth - 10 }
         }).setOrigin(0.5, 0);
         this.sidebar.add(this.lockStatusText);
-        currentY += 58;
+        currentY += 48;
 
-        this.castListText = this.add.text(padding + 4, this.boardHeight - 280, 'CAST:', {
-            fontSize: '16px',
-            fontFamily: '"VT323", monospace',
-            color: '#888888',
-            wordWrap: { width: innerWidth }
-        }).setOrigin(0, 0);
-        this.sidebar.add(this.castListText);
-
-        this.castRowY = this.boardHeight - 240;
+        const castSectionY = Math.max(currentY - 10, this.boardHeight - 214);
+        this.castSectionY = castSectionY;
+        const portraitFrame = this.resolveDirectorPortraitFrame();
         const directorPortraitCard = this.createPortraitCard({
             x: sidebarWidth / 2,
-            y: this.boardHeight - 88,
+            y: castSectionY - 228,
             texture: this.textures.exists('director_portraits') ? 'director_portraits' : null,
-            frame: this.directorData.portraitFrame ?? 0,
-            width: 90,
-            height: 90,
-            footerLabel: 'DIRECTOR',
-            fallbackText: this.directorData.name.split(' ').map((part) => part[0]).join('')
+            frame: portraitFrame,
+            width: 184,
+            height: 252,
+            footerLabel: '',
+            fallbackText: this.directorData.name.split(' ').map((part) => part[0]).join(''),
+            showFooter: false,
+            imageOffsetY: -6
         });
         this.sidebar.add(directorPortraitCard.container);
         this.directorAvatar = directorPortraitCard.container;
         this.popPortrait(directorPortraitCard.container, directorPortraitCard.sprite, 'sfx_win1');
+        this.barkAnchorPoint = {
+            x: directorPortraitCard.container.x,
+            y: directorPortraitCard.container.y + 160
+        };
+
+        const castDividerY = castSectionY + 34;
+        const castDivider = this.add.graphics();
+        castDivider.lineStyle(1, 0x444444, 0.8);
+        castDivider.lineBetween(padding, castDividerY, sidebarWidth - padding, castDividerY);
+        this.sidebar.add(castDivider);
+
+        this.sidebar.add(this.add.text(sidebarWidth / 2, castDividerY + 10, 'ENSEMBLE BOARD', {
+            fontSize: '22px',
+            fontFamily: '"VT323", monospace',
+            color: '#ffaa00',
+            align: 'center'
+        }).setOrigin(0.5, 0));
+
+        this.castListText = this.add.text(sidebarWidth / 2, castDividerY + 38, 'Waiting on the ensemble...', {
+            fontSize: '16px',
+            fontFamily: '"VT323", monospace',
+            color: '#888888',
+            align: 'center',
+            wordWrap: { width: innerWidth - 10 }
+        }).setOrigin(0.5, 0);
+        this.sidebar.add(this.castListText);
+
+        this.castRowY = castDividerY + 84;
+        this.castAnchorPositions = [sidebarWidth / 2 - 64, sidebarWidth / 2, sidebarWidth / 2 + 64];
+        this.castSlotLights = this.castAnchorPositions.map((x) => {
+            const light = this.add.circle(x, castDividerY + 72, 7, 0x443300, 0.95).setStrokeStyle(2, 0x775500);
+            this.sidebar.add(light);
+            return light;
+        });
         this.updateUI();
     }
 
-    createPortraitCard({ x, y, texture, frame = undefined, width = 150, height = 210, footerLabel = '', fallbackText = null }) {
+    createPortraitCard({ x, y, texture, frame = undefined, width = 150, height = 210, footerLabel = '', fallbackText = null, showFooter = true, imageOffsetY = 0 }) {
         const container = this.add.container(x, y);
-        const outer = this.add.rectangle(0, 0, width + 26, height + 66, 0xf7f0e2).setStrokeStyle(5, 0x111111);
-        const matte = this.add.rectangle(0, -12, width, height, 0x111111).setStrokeStyle(2, 0xffaa00);
+        const footerHeight = showFooter ? 34 : 0;
+        const cardHeight = height + 24 + footerHeight;
+        const cardCenterY = showFooter ? 0 : -12;
+        const imageY = cardCenterY + (showFooter ? -10 : 0) + imageOffsetY;
+        const outer = this.add.rectangle(0, cardCenterY, width + 24, cardHeight, 0x20150b).setStrokeStyle(4, 0xffd27a);
+        const matte = this.add.rectangle(0, imageY, width, height, 0x111111).setStrokeStyle(2, 0xffaa00);
         let sprite;
         let fallbackLabel = null;
 
         if (texture && this.textures.exists(texture) && (frame === undefined || this.textures.get(texture).has(frame))) {
-            sprite = this.add.sprite(0, -12, texture, frame);
-            sprite.setDisplaySize(width - 8, height - 8);
+            sprite = this.add.sprite(0, imageY, texture);
+            if (frame !== undefined) {
+                sprite.setTexture(texture, frame);
+            }
+            const availableWidth = width - 8;
+            const availableHeight = height - 8;
+            sprite.setDisplaySize(availableWidth, availableHeight);
             if (typeof sprite.setInterpolation === 'function') {
                 sprite.setInterpolation('pixelated');
             }
             sprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
         } else {
-            sprite = this.add.image(0, -12, 'placeholder_box');
+            sprite = this.add.image(0, imageY, 'placeholder_box');
             sprite.setDisplaySize(width - 8, height - 8);
             sprite.setTint(0x8a8a8a);
             if (fallbackText) {
-                fallbackLabel = this.add.text(0, -12, fallbackText, {
+                fallbackLabel = this.add.text(0, imageY, fallbackText, {
                     fontSize: `${Math.max(18, Math.floor(width * 0.22))}px`,
                     fontFamily: '"VT323", monospace',
                     color: '#f5f5f5',
@@ -567,20 +848,20 @@ export default class PachinkoScene extends Phaser.Scene {
         }
 
         sprite.setAlpha(0);
-        sprite.setScale(0.5);
+        sprite.setData('restScaleX', sprite.scaleX);
+        sprite.setData('restScaleY', sprite.scaleY);
+        sprite.setScale(sprite.scaleX * 0.84, sprite.scaleY * 0.84);
 
-        const viewfinder = this.add.graphics();
-        viewfinder.lineStyle(3, 0xffeab5, 0.95);
-        viewfinder.strokeRect(-(width / 2), -12 - (height / 2), width, height);
-
-        const label = this.add.text(0, height / 2 + 24, footerLabel, {
-            fontSize: '18px',
-            fontFamily: '"VT323", monospace',
-            color: '#221100',
-            letterSpacing: 2
-        }).setOrigin(0.5);
-
-        container.add([outer, matte, sprite, viewfinder, label]);
+        container.add([outer, matte, sprite]);
+        if (showFooter && footerLabel) {
+            const label = this.add.text(0, height / 2 + 18, footerLabel, {
+                fontSize: '18px',
+                fontFamily: '"VT323", monospace',
+                color: '#ffe6b5',
+                letterSpacing: 2
+            }).setOrigin(0.5);
+            container.add(label);
+        }
         if (fallbackLabel) {
             container.add(fallbackLabel);
         }
@@ -590,7 +871,9 @@ export default class PachinkoScene extends Phaser.Scene {
     popPortrait(container, sprite, soundKey = 'sfx_win1') {
         container.setAlpha(1);
         sprite.setAlpha(0);
-        sprite.setScale(0.5);
+        const restScaleX = sprite.getData('restScaleX') ?? 1;
+        const restScaleY = sprite.getData('restScaleY') ?? 1;
+        sprite.setScale(restScaleX * 0.84, restScaleY * 0.84);
 
         if (!this.sound.mute && this.cache.audio.exists(soundKey)) {
             this.sound.play(soundKey, { volume: 0.75 * (GameState.getAudioSettings(this).sfxVolume ?? 1) });
@@ -599,15 +882,15 @@ export default class PachinkoScene extends Phaser.Scene {
         this.tweens.add({
             targets: sprite,
             alpha: 1,
-            scaleX: 1.2,
-            scaleY: 1.2,
+            scaleX: restScaleX * 1.08,
+            scaleY: restScaleY * 1.08,
             duration: 320,
             ease: 'Back.easeOut',
             onComplete: () => {
                 this.tweens.add({
                     targets: sprite,
-                    scaleX: 1,
-                    scaleY: 1,
+                    scaleX: restScaleX,
+                    scaleY: restScaleY,
                     duration: 90,
                     ease: 'Sine.easeOut'
                 });
@@ -622,20 +905,69 @@ export default class PachinkoScene extends Phaser.Scene {
 
         const safeBallsRemaining = Number.isFinite(this.ballsRemaining) ? this.ballsRemaining : 0;
         const safeTarget = Math.max(1, this.levelData?.targetScore || 1);
+        const reelsDropped = GameState.currentRun.reelDrops || 0;
+        const liveTakePotential = this.getLiveTakePotential();
 
-        this.scoreLabel.setText(`BUDGET: ${GameState.formatMillions(this.currentScore)}`);
+        this.clampCurrentScore(this.currentScore);
+        const productionCost = this.getCurrentProductionCost();
+        const expectedReels = this.levelData?.expectedReels || 1;
+        const reelsOver = Math.max(0, this.levelReelsDropped - expectedReels);
+        const netScore = this.getCurrentNetScore();
+        const projectedNet = Math.max(0, netScore + liveTakePotential);
+        const projectedPercent = Phaser.Math.Clamp(Math.floor((projectedNet / safeTarget) * 100), 0, 999);
+        this.scoreLabel.setText(`LANDED: ${GameState.formatMillions(this.currentScore)}`);
+        if (this.netBudgetLabel) {
+            this.netBudgetLabel.setText(`NET: ${GameState.formatMillions(netScore)}`);
+            this.netBudgetLabel.setColor(netScore >= safeTarget ? '#66ff88' : '#8cff98');
+        }
         this.ballLabel.setText(`REELS: ${safeBallsRemaining}`);
+        if (this.droppedLabel) {
+            this.droppedLabel.setText(`DROPPED: ${reelsDropped}`);
+        }
+        if (this.expectedReelsLabel) {
+            this.expectedReelsLabel.setText(`PLAN: ${expectedReels} REEL${expectedReels === 1 ? '' : 'S'}${reelsOver > 0 ? `  (+${reelsOver} OVER)` : ''}`);
+            this.expectedReelsLabel.setColor(reelsOver > 0 ? '#ff8f66' : '#ffaa00');
+        }
+        if (this.padInventoryLabel) {
+            const padCount = GameState.currentRun.inventory.bouncePads || 0;
+            this.padInventoryLabel.setText(`PADS: ${padCount} READY`);
+            this.padInventoryLabel.setColor(padCount > 0 ? '#66f2ff' : '#666666');
+        }
+        if (this.productionCostLabel) {
+            this.productionCostLabel.setText(`COSTS: ${GameState.formatMillions(productionCost)}   NET: ${GameState.formatMillions(netScore)}`);
+            this.productionCostLabel.setColor(productionCost > 0 ? '#ff9c7a' : '#666666');
+        }
+        if (this.liveTakeValueLabel) {
+            this.liveTakeValueLabel.setText(`LIVE TAKE: ${GameState.formatMillions(liveTakePotential)}`);
+            this.liveTakeValueLabel.setColor(liveTakePotential > 0 ? '#66f2ff' : '#666666');
+        }
+        if (this.projectionLabel) {
+            this.projectionLabel.setText(`LANDED + POSSIBLE: ${GameState.formatMillions(projectedNet)} / ${projectedPercent}%`);
+            this.projectionLabel.setColor(projectedNet >= safeTarget ? '#66ff88' : '#f5c518');
+        }
+        if (this.activeReelValuesText) {
+            const liveReels = this.activeBalls.map((ball) => `R${ball.ballId}: ${GameState.formatMillions(this.getBallCurrentPotential(ball))}`);
+            if (!liveReels.length) {
+                this.activeReelValuesText.setText('REELS LIVE: none');
+            } else {
+                const reelLines = [];
+                for (let i = 0; i < liveReels.length; i += 2) {
+                    reelLines.push(liveReels.slice(i, i + 2).join('  |  '));
+                }
+                this.activeReelValuesText.setText(`REELS LIVE:\n${reelLines.join('\n')}`);
+            }
+        }
 
-        const percentage = Math.min(100, Math.floor((this.currentScore / safeTarget) * 100));
+        const percentage = Phaser.Math.Clamp(Math.floor((netScore / safeTarget) * 100), 0, 100);
         this.ratingHUD.setText(`GOAL: ${percentage}%`);
         if (this.progressFill) {
-            const maxHeight = 90;
-            const fillHeight = Math.max(2, maxHeight * (percentage / 100));
-            this.progressFill.height = fillHeight;
+            const maxWidth = this.progressFrame.width - 8;
+            const fillWidth = Phaser.Math.Clamp(maxWidth * (percentage / 100), 0, maxWidth);
+            this.progressFill.width = fillWidth;
         }
 
         [0.25, 0.5, 0.75].forEach((threshold, index) => {
-            if ((this.currentScore / safeTarget) >= threshold && !this.activeCast.includes(index)) {
+            if ((netScore / safeTarget) >= threshold && !this.activeCast.includes(index)) {
                 this.hireActor(index);
             }
         });
@@ -643,10 +975,32 @@ export default class PachinkoScene extends Phaser.Scene {
         if (this.padModeButton?.list?.[1]) {
             this.padModeButton.list[1].setText(this.padModeActive ? 'EDIT SET: ON' : 'PLACE PADS');
         }
+        if (this.padModeButton?.list?.[2]) {
+            this.padModeButton.list[2].setText(this.padModeActive ? 'TAP THE BOARD TO PLACE' : 'TACTICAL SETUP');
+        }
+        if (this.wrapButton) {
+            const canWrap = this.readyToWrap && this.activeBalls.length === 0 && this.ballsRemaining > 0;
+            this.wrapButton.setAlpha(canWrap ? 1 : 0.45);
+            if (canWrap) {
+                this.wrapButton.setInteractive?.();
+            } else {
+                this.wrapButton.disableInteractive?.();
+            }
+            if (this.wrapButton.list?.[1]) {
+                this.wrapButton.list[1].setText(`SELL ${this.ballsRemaining} REELS`);
+            }
+            if (this.wrapButton.list?.[2]) {
+                const saleValue = this.ballsRemaining * (this.levelData?.reelSaleValue || 0);
+                this.wrapButton.list[2].setText(canWrap ? `BONUS ${GameState.formatMillions(saleValue)}` : 'CLEAR GOAL TO CASH OUT');
+            }
+        }
 
         if (this.activeBalls.length > 0) {
             this.lockStatusText?.setText(`LIVE TAKE\n${this.activeBalls.length} reel(s) in motion`);
             this.lockStatusText?.setColor('#ffcf66');
+        } else if (this.readyToWrap && this.ballsRemaining > 0) {
+            this.lockStatusText?.setText('GOAL CLEARED\nSell extras or keep shooting');
+            this.lockStatusText?.setColor('#66ff88');
         } else if (this.padModeActive) {
             this.lockStatusText?.setText('PLANNING PHASE\nTap the set to place a pad');
             this.lockStatusText?.setColor('#00ff99');
@@ -681,10 +1035,10 @@ export default class PachinkoScene extends Phaser.Scene {
         }
 
         const actor = this.leadCast[index];
-        const actorW = 40;
-        const actorH = 54;
+        const actorW = 44;
+        const actorH = 60;
         const portrait = this.createPortraitCard({
-            x: this.sidebarWidth - actorW / 2 - 16 - index * (actorW + 12),
+            x: this.castAnchorPositions?.[index] ?? (this.sidebarWidth / 2),
             y: this.castRowY,
             texture: this.textures.exists(`actor_profile_${index}`) ? `actor_profile_${index}` : null,
             width: actorW,
@@ -695,8 +1049,12 @@ export default class PachinkoScene extends Phaser.Scene {
 
         this.sidebar.add(portrait.container);
         this.castPortraits.push(portrait.container);
+        if (this.castSlotLights?.[index]) {
+            this.castSlotLights[index].setFillStyle(0xf5c518, 1);
+            this.castSlotLights[index].setStrokeStyle(2, 0xfff0a0);
+        }
         this.popPortrait(portrait.container, portrait.sprite, 'sfx_win2');
-        this.addBark(`${actor.name.split(' ')[0]} joined!`, portrait.container);
+        this.addBark(`${actor.name.split(' ')[0]} ready`, portrait.container);
         this.updateCastList();
     }
 
@@ -705,8 +1063,41 @@ export default class PachinkoScene extends Phaser.Scene {
             return;
         }
 
-        const names = this.activeCast.map((index) => this.leadCast[index].name);
-        this.castListText.setText(`CAST: ${names.join(', ') || 'Wait for it...'}`);
+        const names = this.activeCast.map((index) => this.leadCast[index].name.split(' ')[0].toUpperCase());
+        this.castListText.setText(names.length ? names.join('  •  ') : 'Waiting on the ensemble...');
+    }
+
+    resolveDirectorPortraitFrame() {
+        if (!this.textures.exists('director_portraits')) {
+            return this.directorData.portraitFrame ?? 0;
+        }
+
+        const texture = this.textures.get('director_portraits');
+        const portraitToken = this.resolveDirectorPortraitToken();
+        if (texture.has(portraitToken)) {
+            return portraitToken;
+        }
+
+        const numericFrame = this.directorData.portraitFrame ?? 0;
+        return texture.has(numericFrame) ? numericFrame : 0;
+    }
+
+    resolveDirectorPortraitToken() {
+        const candidates = [
+            this.directorData.portraitKey,
+            this.directorData.portraitFrame
+        ];
+        const hardcodedMatch = TMDB.getHardcodedDirectors().find((director) => {
+            return director.id === this.directorData.id || director.name === this.directorData.name;
+        });
+        if (hardcodedMatch) {
+            candidates.push(hardcodedMatch.portraitKey, hardcodedMatch.portraitFrame);
+        }
+        return candidates.find((candidate) => candidate !== undefined && candidate !== null) ?? 0;
+    }
+
+    getLiveTakePotential() {
+        return this.activeBalls.reduce((sum, ball) => sum + this.getBallCurrentPotential(ball), 0);
     }
 
     createSidebarAudioControls() {
@@ -716,7 +1107,8 @@ export default class PachinkoScene extends Phaser.Scene {
             onClose: () => this.matter.world.resume()
         });
 
-        this.settingsBtn = UI.createSettingsButton(this, this.sidebarWidth - 50, 80, () => {
+        const { x, y } = UI.getSettingsButtonPositionInContainer(this, this.margin + this.boardWidth, this.margin);
+        this.settingsBtn = UI.createSettingsButton(this, x, y, () => {
             const settings = GameState.getAudioSettings(this);
             if (!this.sound.mute && this.cache.audio.exists('sfx_gear')) {
                 this.sound.play('sfx_gear', { volume: 0.8 * (settings.sfxVolume ?? 1) });
@@ -725,6 +1117,9 @@ export default class PachinkoScene extends Phaser.Scene {
             this.settingsOverlay.openModal();
         });
         this.sidebar.add(this.settingsBtn);
+        if (typeof this.sidebar.bringToTop === 'function') {
+            this.sidebar.bringToTop(this.settingsBtn);
+        }
         this.settingsBtn.setDepth(2000);
     }
 
@@ -770,9 +1165,13 @@ export default class PachinkoScene extends Phaser.Scene {
         ball.lastExplosionTime = 0;
         ball.isOscarBall = isOscarBall;
         ball.ballType = visualKey === 'filmreel' ? 'reel' : visualKey;
+        ball.pendingValue = 0;
+        ball.ballId = this.nextBallId++;
+        ball.expireAt = this.time.now + this.getReelLifetimeMs();
 
         this.activeBalls.push(ball);
         this.ballsRemaining -= 1;
+        this.levelReelsDropped += 1;
         GameState.currentRun.ballStats[ball.ballType] = (GameState.currentRun.ballStats[ball.ballType] || 0) + 1;
         GameState.currentRun.reelDrops += 1;
         this.updateUI();
@@ -837,7 +1236,7 @@ export default class PachinkoScene extends Phaser.Scene {
                 } else if (other.label.startsWith('bucket_')) {
                     this.checkBallBucketCollision(ball, other);
                 } else if (other.label === 'oscar') {
-                    this.checkOscarCollision();
+                    this.checkOscarCollision(ball);
                 } else if (other.label === 'ball_eater') {
                     this.handleBallEaterCollision(ball, other);
                 } else if (other.label === 'gutter') {
@@ -867,19 +1266,15 @@ export default class PachinkoScene extends Phaser.Scene {
         if ((now - (ball.lastPegHitTime || 0)) < PEG_COOLDOWN_MS) return;
         ball.lastPegHitTime = now;
 
-        // --- Diminishing Returns: Each hit on the same peg yields 50% less ---
         peg.bounceCount = (peg.bounceCount || 0) + 1;
-        const bounceMult = Math.pow(0.5, peg.bounceCount - 1);
 
         // Cap multiplier at 16× to prevent exponential runaway
         const MAX_MULTIPLIER = 16;
         ball.scoreMultiplier = Math.min((ball.scoreMultiplier || 1) * (peg.multiplier || 1), MAX_MULTIPLIER);
+        const bounceValue = Math.max(8, Math.round((12 + ((peg.multiplier || 1) * 10)) * Math.pow(0.9, Math.min(peg.bounceCount - 1, 5))));
+        ball.pendingValue = (ball.pendingValue || 0) + bounceValue;
+        this.spawnValueBurst(ball.position.x, ball.position.y - 12, `+${bounceValue}`);
 
-        const earned = Math.round(10 * bounceMult);
-        this.currentScore += earned;
-        this.currentScore = Math.min(this.currentScore, MAX_RUN_BUDGET - this.runScoreBase);
-        
-        GameState.currentRun.score = Math.min(this.runScoreBase + this.currentScore, MAX_RUN_BUDGET);
         this.spawnExposureDot(ball.position.x, ball.position.y);
         this.updateUI();
     }
@@ -890,13 +1285,10 @@ export default class PachinkoScene extends Phaser.Scene {
         ball.bucketTriggered = true;
 
         const scoreStr = bucket.label.split('_')[1];
-        const rawPoints = Number(scoreStr) * (ball.scoreMultiplier || 1) * (ball.isOscarBall ? 2.5 : 1);
+        const rawPoints = Number(scoreStr) * (ball.scoreMultiplier || 1) * (ball.isOscarBall ? 2.5 : 1) + (ball.pendingValue || 0);
         // Cap a single drop at 50% of the level target to prevent runaway scoring
         const points = Math.min(rawPoints, (this.levelData?.targetScore || 10000) * 0.5);
-        this.currentScore += points;
-        this.currentScore = Math.min(this.currentScore, MAX_RUN_BUDGET - this.runScoreBase);
-        
-        GameState.currentRun.score = Math.min(this.runScoreBase + this.currentScore, MAX_RUN_BUDGET);
+        this.clampCurrentScore(this.currentScore + points);
         this.updateUI();
         this.cameras.main.shake(100, 0.01);
 
@@ -936,10 +1328,7 @@ export default class PachinkoScene extends Phaser.Scene {
     }
 
     handleBallEaterCollision(ball, eater) {
-        this.currentScore = Math.max(0, this.currentScore - 50);
-        GameState.currentRun.score = this.runScoreBase + this.currentScore;
-        this.updateUI();
-        this.addBark('Ball eater! -$50M', eater.visual);
+        this.addBark('Ball eater! Take lost.', eater.visual);
         this.removeBall(ball);
     }
 
@@ -974,27 +1363,18 @@ export default class PachinkoScene extends Phaser.Scene {
         this.oscar = { visual, body, stars, startTime: this.time.now, startY: y };
     }
 
-    checkOscarCollision() {
-        if (!this.oscar) {
+    checkOscarCollision(ball) {
+        if (!this.oscar || !ball) {
             return;
         }
 
-        const isEnsemble = this.activeCast.length === 3;
-        let bonus = 5000 + (this.currentScore * 0.1);
-        bonus *= this.directorModifiers.oscarBonusMult || 1;
-        if (isEnsemble) {
-            bonus *= 2;
-        }
-        bonus = Math.round(bonus);
-
-        this.currentScore += bonus;
-        GameState.currentRun.score = this.runScoreBase + this.currentScore;
-        this.updateUI();
+        const pickupMult = this.directorModifiers.oscarBonusMult || 1;
+        ball.scoreMultiplier = Math.min((ball.scoreMultiplier || 1) * (2 * pickupMult), 16);
         
         // Trigger scanline reactive jitter for Oscar!
         this.game.events.emit('game-impact', 2.5);
 
-        const bonusTxt = this.add.text(this.oscar.visual.x, this.oscar.visual.y, `+$${bonus}M! ${isEnsemble ? 'CAST BONUS!' : ''}`, {
+        const bonusTxt = this.add.text(this.oscar.visual.x, this.oscar.visual.y, 'OSCAR BOOST!', {
             fontSize: '36px',
             fontFamily: '"VT323", monospace',
             color: '#f5c518',
@@ -1017,11 +1397,12 @@ export default class PachinkoScene extends Phaser.Scene {
             this.sound.play('sfx_oscar', { volume: 1.2 * (GameState.getAudioSettings(this).sfxVolume ?? 1) });
         }
 
-        this.ensembleCheer();
+        this.addBark('Oscar boost ready!');
         this.oscar.visual.destroy();
         this.oscar.stars.destroy();
         this.matter.world.remove(this.oscar.body);
         this.oscar = null;
+        this.updateUI();
     }
 
     ensembleCheer() {
@@ -1053,6 +1434,19 @@ export default class PachinkoScene extends Phaser.Scene {
         this.updateUI();
     }
 
+    handleSellExtras() {
+        if (!this.readyToWrap || this.activeBalls.length > 0 || this.ballsRemaining <= 0) {
+            return;
+        }
+
+        const saleValue = this.ballsRemaining * (this.levelData?.reelSaleValue || 0);
+        this.clampCurrentScore(this.currentScore + saleValue);
+        this.addBark(`Sold extras for ${GameState.formatMillions(saleValue)}`);
+        this.ballsRemaining = 0;
+        this.updateUI();
+        this.handleLevelWin();
+    }
+
     handleAbandonProduction() {
         if (!this.sound.mute && this.cache.audio.exists('sfx_abandon')) {
             this.sound.play('sfx_abandon', { volume: 0.9 * (GameState.getAudioSettings(this).sfxVolume ?? 1) });
@@ -1066,14 +1460,17 @@ export default class PachinkoScene extends Phaser.Scene {
             return;
         }
 
-        const bark = this.add.container(target.x, target.y - 100).setDepth(500);
-        const bg = this.add.rectangle(0, 0, 200, 60, 0xffffff).setStrokeStyle(2, 0x000000);
+        const barkX = anchor ? target.x : (this.barkAnchorPoint?.x ?? target.x + 78);
+        const barkY = anchor ? target.y - 72 : (this.barkAnchorPoint?.y ?? target.y - 108);
+        const bark = this.add.container(barkX, barkY).setDepth(500);
+        const bg = this.add.rectangle(0, 0, 172, 40, 0x18110a).setStrokeStyle(2, 0xffaa00);
+        const accent = this.add.rectangle(-78, 0, 8, 40, 0xf5c518, 1);
         const txt = this.add.text(0, 0, textStr, {
-            fontSize: '20px',
-            color: '#000',
+            fontSize: '18px',
+            color: '#fff0c9',
             fontFamily: '"VT323", monospace'
         }).setOrigin(0.5);
-        bark.add([bg, txt]);
+        bark.add([bg, accent, txt]);
         this.sidebar.add(bark);
 
         this.tweens.add({
@@ -1105,6 +1502,25 @@ export default class PachinkoScene extends Phaser.Scene {
         this.addBark('Explosion assist!');
     }
 
+    spawnValueBurst(x, y, valueText) {
+        const burst = this.add.text(x, y, valueText, {
+            fontSize: '18px',
+            fontFamily: '"VT323", monospace',
+            color: '#ffef9a',
+            stroke: '#2b1400',
+            strokeThickness: 4
+        }).setOrigin(0.5).setDepth(40);
+        this.boardContainer.add(burst);
+        this.tweens.add({
+            targets: burst,
+            y: y - 26,
+            alpha: 0,
+            duration: 650,
+            ease: 'Sine.easeOut',
+            onComplete: () => burst.destroy()
+        });
+    }
+
     destroyPegsNear(x, y, radius) {
         this.pegEntries = this.pegEntries.filter((entry) => {
             const distance = Phaser.Math.Distance.Between(x, y, entry.body.position.x, entry.body.position.y);
@@ -1124,11 +1540,10 @@ export default class PachinkoScene extends Phaser.Scene {
             return;
         }
 
-        if (this.currentScore >= this.levelData.targetScore) {
-            if (this.activeBalls.length === 0) {
+        if (this.getCurrentNetScore() >= this.levelData.targetScore) {
+            this.readyToWrap = true;
+            if (this.activeBalls.length === 0 && this.ballsRemaining <= 0) {
                 this.handleLevelWin();
-            } else {
-                this.pendingRoundWin = true;
             }
             return;
         }
@@ -1143,13 +1558,20 @@ export default class PachinkoScene extends Phaser.Scene {
         this.isLevelActive = false;
         this.levelTransitioning = true;
         this.pendingRoundWin = false;
-        GameState.currentRun.lastRoundScore = this.currentScore;
+        const productionCost = this.getCurrentProductionCost();
+        const netRoundScore = this.getCurrentNetScore();
+        GameState.currentRun.lastGrossRoundScore = this.currentScore;
+        GameState.currentRun.lastProductionCost = productionCost;
+        GameState.currentRun.lastNetRoundScore = netRoundScore;
+        GameState.currentRun.lastExpectedReels = this.levelData.expectedReels || 1;
+        GameState.currentRun.lastReelsOver = Math.max(0, this.levelReelsDropped - (this.levelData.expectedReels || 1));
+        GameState.currentRun.lastRoundScore = netRoundScore;
         GameState.currentRun.lastTargetScore = this.levelData.targetScore;
-        GameState.currentRun.lastRating = Math.max(0, Math.round((this.currentScore / this.levelData.targetScore) * 10) / 10);
+        GameState.currentRun.lastRating = Math.max(0, Math.round((netRoundScore / this.levelData.targetScore) * 10) / 10);
 
         // IMDb Ranking Connection
         const isDeepCut = GameState.currentRun.currentFilmIndex === 4;
-        const projectedRating = (this.currentScore / this.levelData.targetScore) * 9.2;
+        const projectedRating = (netRoundScore / this.levelData.targetScore) * 9.2;
         
         if (isDeepCut && projectedRating >= 9.0) {
             this.triggerMasterpieceAnimation();
@@ -1217,6 +1639,8 @@ export default class PachinkoScene extends Phaser.Scene {
             return;
         }
 
+        this.syncBackgroundPlatforms();
+
         if (this.oscar?.visual) {
             const t = (time - this.oscar.startTime) / 1000;
             this.oscar.visual.y = this.oscar.startY + Math.sin(t * 2) * 50;
@@ -1238,6 +1662,12 @@ export default class PachinkoScene extends Phaser.Scene {
                 ball.visual.rotation = ball.angle;
             }
 
+            if (time >= (ball.expireAt || Infinity)) {
+                this.addBark(`Reel ${ball.ballId} timed out`);
+                this.removeBall(ball);
+                return;
+            }
+
             const speed = Math.hypot(ball.velocity.x, ball.velocity.y);
             if (speed > 0.6) {
                 ball.lastMovingTime = time;
@@ -1250,6 +1680,19 @@ export default class PachinkoScene extends Phaser.Scene {
             }
         });
 
+        this.ballEaters.forEach((eater, index) => {
+            if (!eater?.visual || !eater?.labelText) {
+                return;
+            }
+            eater.orbitAngle += eater.orbitSpeed;
+            const eaterX = eater.orbitCenterX + Math.cos(eater.orbitAngle) * eater.orbitRadiusX;
+            const eaterY = eater.orbitCenterY + Math.sin(eater.orbitAngle) * eater.orbitRadiusY;
+            this.matter.body.setPosition(eater, { x: eaterX, y: eaterY });
+            eater.visual.setPosition(eaterX, eaterY);
+            eater.labelText.setPosition(eaterX, eaterY);
+            eater.visual.rotation += 0.02 + (index * 0.002);
+        });
+
         this.exposureDots = this.exposureDots.filter((dot) => {
             if (dot.alpha <= 0.02) {
                 dot.destroy();
@@ -1259,9 +1702,6 @@ export default class PachinkoScene extends Phaser.Scene {
             return true;
         });
 
-        if (this.pendingRoundWin && this.activeBalls.length === 0) {
-            this.handleLevelWin();
-        }
     }
 
     configureLevelData() {
@@ -1271,9 +1711,13 @@ export default class PachinkoScene extends Phaser.Scene {
 
         const levelIndex = GameState.currentRun.currentFilmIndex;
         this.levelData.targetScore = Math.round((2000 + (levelIndex * 900)) * (this.directorModifiers.targetScoreMult ?? 1));
+        this.levelData.expectedReels = Math.max(1, 5 - levelIndex);
+        this.levelData.productionBaseCost = 200 + (levelIndex * 150);
+        this.levelData.extraReelCost = 180 + (levelIndex * 140);
+        this.levelData.reelSaleValue = 140 + (levelIndex * 60);
         this.ballsRemaining = Math.max(
             1,
-            this.levelData.balls + (this.directorModifiers.startingBalls || 0) - (GameState.draftingPenalty || 0)
+            10 + (this.directorModifiers.startingBalls || 0) - (GameState.draftingPenalty || 0)
         );
         this.pegRestitution = 0.8 + (this.directorModifiers.pegBounce || 0);
         this.pegFriction = (this.levelData.friction || 0.001) + (this.directorModifiers.pegFriction || 0);

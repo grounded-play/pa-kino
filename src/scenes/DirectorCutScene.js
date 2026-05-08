@@ -11,6 +11,12 @@ export default class DirectorCutScene extends Phaser.Scene {
         this.win = Boolean(data?.win);
         this.abandoned = Boolean(data?.abandoned);
         this.finalScore = data?.score ?? GameState.currentRun.score ?? 0;
+        this.productionCosts = data?.productionCosts ?? GameState.currentRun.productionCosts ?? 0;
+        this.lastGrossRoundScore = data?.lastGrossRoundScore ?? GameState.currentRun.lastGrossRoundScore ?? 0;
+        this.lastProductionCost = data?.lastProductionCost ?? GameState.currentRun.lastProductionCost ?? 0;
+        this.lastNetRoundScore = data?.lastNetRoundScore ?? GameState.currentRun.lastNetRoundScore ?? 0;
+        this.lastExpectedReels = data?.lastExpectedReels ?? GameState.currentRun.lastExpectedReels ?? 0;
+        this.lastReelsOver = data?.lastReelsOver ?? GameState.currentRun.lastReelsOver ?? 0;
         this.moviesCompleted = data?.moviesCompleted ?? GameState.currentRun.currentFilmIndex ?? 0;
         this.completedFilms = data?.completedFilms ?? GameState.currentRun.filmography.slice(0, this.moviesCompleted);
         this.ballStats = data?.ballStats ?? { ...GameState.currentRun.ballStats };
@@ -47,7 +53,9 @@ export default class DirectorCutScene extends Phaser.Scene {
             align: 'center'
         }).setOrigin(0.5);
         summary.setText(
-            `BUDGET EARNED: ${GameState.formatMillions(this.finalScore)}\n` +
+            `NET BUDGET: ${GameState.formatMillions(this.finalScore)}\n` +
+            `LAST FILM GROSS / COSTS / NET: ${GameState.formatMillions(this.lastGrossRoundScore)} / ${GameState.formatMillions(this.lastProductionCost)} / ${GameState.formatMillions(this.lastNetRoundScore)}\n` +
+            `PLAN: ${this.lastExpectedReels} REELS${this.lastReelsOver > 0 ? `  (+${this.lastReelsOver} OVER)` : ''}\n` +
             `FILMS COMPLETED THIS RUN: ${this.moviesCompleted}\n` +
             `REELS DROPPED: ${this.ballStats.reel + this.ballStats.vhs + this.ballStats.dvd}`
         );

@@ -15,6 +15,7 @@ export default class BackgroundScene extends Phaser.Scene {
         this.CAT_LOGO = this.matter.world.nextCategory();
 
         this.clickRipplesEnabled = true;
+        this.ballsVisible = true;
         this.cubeHalfWidth = 128;
         this.cubeHalfHeight = 64;
         this.cubeHeight = 256;
@@ -153,6 +154,13 @@ export default class BackgroundScene extends Phaser.Scene {
 
     setClickRipplesEnabled(enabled) {
         this.clickRipplesEnabled = enabled;
+    }
+
+    setBallsVisible(visible) {
+        this.ballsVisible = visible;
+        this.balls.forEach(({ visual }) => {
+            visual.setVisible(visible);
+        });
     }
 
     createPhysicalWheel(x, y, radius) {
@@ -297,7 +305,7 @@ export default class BackgroundScene extends Phaser.Scene {
             density: 0.05,
             collisionFilter: {
                 category: this.CAT_BALL,
-                mask: this.CAT_BALL | this.CAT_ROCK // Balls collide with balls and rocks, but not logo
+                mask: 0xFFFFFFFF
             }
         });
         
@@ -306,6 +314,7 @@ export default class BackgroundScene extends Phaser.Scene {
         vis.setStrokeStyle(2, 0xffffff);
         // Balls are on depth 10 (Background/Inside)
         vis.setDepth(10);
+        vis.setVisible(this.ballsVisible);
         
         // Initial pop
         this.matter.body.setVelocity(ballBody, { x: Phaser.Math.FloatBetween(-2, 2), y: Phaser.Math.FloatBetween(-2, 2) });
@@ -365,6 +374,7 @@ export default class BackgroundScene extends Phaser.Scene {
         for (let i = this.balls.length - 1; i >= 0; i--) {
             let ball = this.balls[i];
             ball.visual.setPosition(ball.body.position.x, ball.body.position.y);
+            ball.visual.setVisible(this.ballsVisible);
             
             if (vortex.power > 0) {
                 const dx = vortex.x - ball.body.position.x;

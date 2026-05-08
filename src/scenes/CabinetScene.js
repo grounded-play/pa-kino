@@ -4,18 +4,36 @@ import { GameState } from '../GameState.js';
 export default class CabinetScene extends Phaser.Scene {
     constructor() {
         super({ key: 'CabinetScene', active: false });
+        this.scanlineTextureKey = 'cabinet-scanline-strip';
+        this.scanlineBaseAlpha = 0.15;
     }
 
     create() {
         const { width, height } = this.scale;
-        
+
         // High depth to ensure it's always on top
         this.overlayContainer = this.add.container(0, 0).setDepth(10000).setScrollFactor(0);
 
+        this.ensureScanlineTexture();
         this.drawBezel(width, height);
         this.addScanlines(width, height);
         this.addVignette(width, height);
         this.addBranding(width, height);
+    }
+
+    ensureScanlineTexture() {
+        if (this.textures.exists(this.scanlineTextureKey)) {
+            return;
+        }
+
+        const scanlineTexture = this.textures.createCanvas(this.scanlineTextureKey, 1, 4);
+        const context = scanlineTexture.getContext();
+
+        context.clearRect(0, 0, 1, 4);
+        context.fillStyle = 'rgba(0, 0, 0, 1)';
+        context.fillRect(0, 0, 1, 1);
+
+        scanlineTexture.refresh();
     }
 
     drawBezel(width, height) {
@@ -25,7 +43,7 @@ export default class CabinetScene extends Phaser.Scene {
 
         // Dark Cabinet Frame (Outer)
         graphics.fillStyle(0x050505, 1);
-        
+
         // Top
         graphics.fillRect(0, 0, width, thickness);
         // Bottom
@@ -37,12 +55,12 @@ export default class CabinetScene extends Phaser.Scene {
 
         // Solid Corner Fills (Matte off the areas outside the curve)
         graphics.fillStyle(0x050505, 1);
-        
+
         // Top Left
         graphics.beginPath();
         graphics.moveTo(thickness, thickness);
         graphics.lineTo(thickness + cornerRadius, thickness);
-        graphics.arc(thickness + cornerRadius, thickness + cornerRadius, cornerRadius, -Math.PI/2, Math.PI, true);
+        graphics.arc(thickness + cornerRadius, thickness + cornerRadius, cornerRadius, -Math.PI / 2, Math.PI, true);
         graphics.lineTo(thickness, thickness);
         graphics.closePath();
         graphics.fillPath();
@@ -53,7 +71,7 @@ export default class CabinetScene extends Phaser.Scene {
         graphics.beginPath();
         graphics.moveTo(width - thickness, thickness);
         graphics.lineTo(width - thickness - cornerRadius, thickness);
-        graphics.arc(width - thickness - cornerRadius, thickness + cornerRadius, cornerRadius, -Math.PI/2, 0, false);
+        graphics.arc(width - thickness - cornerRadius, thickness + cornerRadius, cornerRadius, -Math.PI / 2, 0, false);
         graphics.lineTo(width - thickness, thickness);
         graphics.closePath();
         graphics.fillPath();
@@ -64,7 +82,7 @@ export default class CabinetScene extends Phaser.Scene {
         graphics.beginPath();
         graphics.moveTo(thickness, height - thickness);
         graphics.lineTo(thickness + cornerRadius, height - thickness);
-        graphics.arc(thickness + cornerRadius, height - thickness - cornerRadius, cornerRadius, Math.PI/2, Math.PI, false);
+        graphics.arc(thickness + cornerRadius, height - thickness - cornerRadius, cornerRadius, Math.PI / 2, Math.PI, false);
         graphics.lineTo(thickness, height - thickness);
         graphics.closePath();
         graphics.fillPath();
@@ -75,7 +93,7 @@ export default class CabinetScene extends Phaser.Scene {
         graphics.beginPath();
         graphics.moveTo(width - thickness, height - thickness);
         graphics.lineTo(width - thickness - cornerRadius, height - thickness);
-        graphics.arc(width - thickness - cornerRadius, height - thickness - cornerRadius, cornerRadius, Math.PI/2, 0, true);
+        graphics.arc(width - thickness - cornerRadius, height - thickness - cornerRadius, cornerRadius, Math.PI / 2, 0, true);
         graphics.lineTo(width - thickness, height - thickness);
         graphics.closePath();
         graphics.fillPath();
@@ -94,46 +112,63 @@ export default class CabinetScene extends Phaser.Scene {
     }
 
     addScanlines(width, height) {
-        this.scanlines = this.add.graphics();
-        this.scanlines.lineStyle(1, 0x000000, 0.15);
-        
-        // Draw slightly more lines to allow for scrolling without gaps
-        for (let i = -8; i < height + 8; i += 4) {
-            this.scanlines.lineBetween(0, i, width, i);
-        }
-        
+        this.scanlines = this.add.tileSprite(0, 0, width, height, this.scanlineTextureKey)
+            .setOrigin(0, 0)
+            .setAlpha(this.scanlineBaseAlpha);
+
         this.overlayContainer.add(this.scanlines);
         this.refreshScanlines();
 
-        // 1. Continuous subtle rolling effect (Slow crawl)
+        // Hardware-accelerated UV scroll gives a much smoother CRT crawl than moving geometry.
         this.scanlineTween = this.tweens.add({
             targets: this.scanlines,
-            y: 4,
+            tilePositionY: 4,
             duration: 4000,
             repeat: -1,
             ease: 'Linear'
         });
 
-        // 2. Global event listener for game impacts to trigger reactive jitter
-        this.game.events.on('game-impact', (intensity = 1) => {
+        this.handleScanlineImpact = (intensity = 1) => {
             this.triggerScanlineJitter(intensity);
+        };
+
+        this.game.events.on('game-impact', this.handleScanlineImpact);
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            if (this.handleScanlineImpact) {
+                this.game.events.off('game-impact', this.handleScanlineImpact);
+            }
         });
     }
 
     triggerScanlineJitter(intensity = 1) {
         if (!this.scanlines || !this.scanlines.visible) return;
 
-        // Briefly speed up the roll and add horizontal jitter
-        this.tweens.add({
+        if (this.scanlineJitterTween) {
+            this.scanlineJitterTween.stop();
+        }
+
+        const baseY = this.scanlines.tilePositionY;
+        const offsetX = 2 * intensity;
+        const offsetY = 1.5 * intensity;
+
+        // Briefly wobble the UVs and thicken the effect with a stronger alpha spike.
+        this.scanlineJitterTween = this.tweens.add({
             targets: this.scanlines,
-            x: { from: -2 * intensity, to: 2 * intensity },
-            alpha: { from: 0.15, to: 0.3 },
-            duration: 40,
+            tilePositionX: { from: -offsetX, to: offsetX },
+            tilePositionY: { from: baseY - offsetY, to: baseY + offsetY },
+            alpha: { from: this.scanlineBaseAlpha, to: Math.min(0.35, this.scanlineBaseAlpha + (0.08 * intensity)) },
+            duration: 45,
             yoyo: true,
             repeat: 2,
             onComplete: () => {
-                this.scanlines.x = 0;
-                this.scanlines.alpha = 1; // Alpha is handled by visible, but let's be safe
+                if (!this.scanlines) {
+                    return;
+                }
+
+                this.scanlines.tilePositionX = 0;
+                this.scanlines.tilePositionY = baseY;
+                this.scanlines.alpha = this.scanlineBaseAlpha;
+                this.scanlineJitterTween = null;
             }
         });
     }
@@ -141,20 +176,20 @@ export default class CabinetScene extends Phaser.Scene {
     addVignette(width, height) {
         // Subtle corner shadowing
         const vignette = this.add.graphics();
-        
+
         // Radial gradient is hard in Graphics, so we'll use a pre-rendered texture if possible
         // or just a set of thick outer shadows.
-        
+
         vignette.fillStyle(0x000000, 0.4);
-        
+
         // We'll draw 4 corner arcs
         const radius = 200;
-        
+
         // Top Left
         vignette.beginPath();
         vignette.moveTo(0, 0);
         vignette.lineTo(radius, 0);
-        vignette.arc(radius, radius, radius, -Math.PI/2, Math.PI, true);
+        vignette.arc(radius, radius, radius, -Math.PI / 2, Math.PI, true);
         vignette.lineTo(0, 0);
         vignette.closePath();
         vignette.fillPath();
@@ -163,7 +198,7 @@ export default class CabinetScene extends Phaser.Scene {
         vignette.beginPath();
         vignette.moveTo(width, 0);
         vignette.lineTo(width - radius, 0);
-        vignette.arc(width - radius, radius, radius, -Math.PI/2, 0, false);
+        vignette.arc(width - radius, radius, radius, -Math.PI / 2, 0, false);
         vignette.lineTo(width, 0);
         vignette.closePath();
         vignette.fillPath();
@@ -172,7 +207,7 @@ export default class CabinetScene extends Phaser.Scene {
         vignette.beginPath();
         vignette.moveTo(0, height);
         vignette.lineTo(radius, height);
-        vignette.arc(radius, height - radius, radius, Math.PI/2, Math.PI, false);
+        vignette.arc(radius, height - radius, radius, Math.PI / 2, Math.PI, false);
         vignette.lineTo(0, height);
         vignette.closePath();
         vignette.fillPath();
@@ -181,7 +216,7 @@ export default class CabinetScene extends Phaser.Scene {
         vignette.beginPath();
         vignette.moveTo(width, height);
         vignette.lineTo(width - radius, height);
-        vignette.arc(width - radius, height - radius, radius, Math.PI/2, 0, true);
+        vignette.arc(width - radius, height - radius, radius, Math.PI / 2, 0, true);
         vignette.lineTo(width, height);
         vignette.closePath();
         vignette.fillPath();
@@ -195,7 +230,7 @@ export default class CabinetScene extends Phaser.Scene {
             fontFamily: 'monospace',
             color: '#444'
         }).setOrigin(0.5);
-        
+
         this.overlayContainer.add(brand);
     }
 

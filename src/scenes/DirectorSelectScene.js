@@ -635,7 +635,8 @@ export default class DirectorSelectScene extends Phaser.Scene {
 
     createAudioToggle(width, height) {
         this.settingsOverlay = UI.createSettingsOverlay(this);
-        this.settingsBtn = UI.createSettingsButton(this, width - 140, 140, () => {
+        const { x, y } = UI.getSettingsButtonPosition(this);
+        this.settingsBtn = UI.createSettingsButton(this, x, y, () => {
             const settings = GameState.getAudioSettings(this);
             if (!this.sound.mute && this.cache.audio.exists('sfx_gear')) {
                 this.sound.play('sfx_gear', { volume: 0.8 * (settings.sfxVolume ?? 1) });

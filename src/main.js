@@ -13,6 +13,26 @@ import CursorScene from './scenes/CursorScene.js';
 import ChromaKeyPipeline from './utils/ChromaKeyPipeline.js';
 import WarpPipeline from './utils/WarpPipeline.js';
 
+function enforceHiddenCursor() {
+    if (typeof document === 'undefined') {
+        return;
+    }
+
+    const gameContainer = document.getElementById('game-container');
+    const canvas = gameContainer?.querySelector('canvas');
+
+    document.body.style.cursor = 'none';
+    document.documentElement.style.cursor = 'none';
+
+    if (gameContainer) {
+        gameContainer.style.cursor = 'none';
+    }
+
+    if (canvas) {
+        canvas.style.cursor = 'none';
+    }
+}
+
 const config = {
     type: Phaser.AUTO,
     parent: 'game-container',
@@ -50,3 +70,21 @@ const config = {
 };
 
 const game = new Phaser.Game(config);
+
+enforceHiddenCursor();
+
+if (typeof document !== 'undefined') {
+    ['fullscreenchange', 'webkitfullscreenchange', 'pointerlockchange', 'visibilitychange'].forEach((eventName) => {
+        document.addEventListener(eventName, () => {
+            window.requestAnimationFrame(() => enforceHiddenCursor());
+            window.setTimeout(enforceHiddenCursor, 0);
+            window.setTimeout(enforceHiddenCursor, 150);
+        });
+    });
+
+    window.addEventListener('focus', () => {
+        window.requestAnimationFrame(() => enforceHiddenCursor());
+    });
+
+    window.addEventListener('mousemove', enforceHiddenCursor, { passive: true });
+}
