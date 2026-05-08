@@ -158,21 +158,23 @@ export const UI = {
         graphics.fillStyle(0xffaa00, 1);
         graphics.fillRoundedRect(-width / 2, -height / 2, width, height / 3, { tl: r, tr: r, bl: 0, br: 0 });
 
-        const textObj = scene.add.text(0, subTextStr ? -12 : 0, textStr, {
+        const textObj = scene.add.text(0, subTextStr ? -14 : 0, textStr, {
             fontSize: subTextStr ? '32px' : '40px',
             fontFamily: '"VT323", monospace',
             color: '#ffffff',
             stroke: '#331100',
-            strokeThickness: 3
+            strokeThickness: 3,
+            padding: { top: 12, bottom: 4 }
         }).setOrigin(0.5);
 
         container.add([graphics, textObj]);
 
         if (subTextStr) {
-            const subText = scene.add.text(0, 18, subTextStr, {
-                fontSize: '20px',
+            const subText = scene.add.text(0, 16, subTextStr, {
+                fontSize: '24px',
                 fontFamily: '"VT323", monospace',
-                color: '#ffcc00'
+                color: '#ffcc00',
+                padding: { top: 4, bottom: 4 }
             }).setOrigin(0.5);
             container.add(subText);
         }
@@ -182,7 +184,7 @@ export const UI = {
         const hitWidth = width + hitPaddingX;
         const hitHeight = height + 8 + hitPaddingY;
 
-        const hitTarget = scene.add.rectangle(x, y + 4, hitWidth, hitHeight, 0xffffff, 0.001);
+        const hitTarget = scene.add.zone(x, y + 4, hitWidth, hitHeight);
         hitTarget.setDepth((container.depth || 0) + 1);
         hitTarget.setInteractive({ useHandCursor: true });
         hitTarget.input.cursor = 'pointer';

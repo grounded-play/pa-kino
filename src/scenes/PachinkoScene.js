@@ -752,16 +752,16 @@ export default class PachinkoScene extends Phaser.Scene {
             fontFamily: '"VT323", monospace',
             color: '#66f2ff'
         }).setOrigin(0, 0);
-        this.liveTakeValueLabel = this.add.text(padding + 8, currentY + 260, 'LIVE TAKE: $0M', {
-            fontSize: '20px',
-            fontFamily: '"VT323", monospace',
-            color: '#66f2ff',
-            wordWrap: { width: innerWidth - 24 }
-        }).setOrigin(0, 0);
-        this.activeReelValuesText = this.add.text(padding + 8, currentY + 286, 'REELS LIVE: none', {
-            fontSize: '16px',
+        this.activeReelValuesText = this.add.text(padding + 8, currentY + 260, 'REELS LIVE: 0', {
+            fontSize: '22px',
             fontFamily: '"VT323", monospace',
             color: '#aaaaaa',
+            wordWrap: { width: innerWidth - 24 }
+        }).setOrigin(0, 0);
+        this.liveTakeValueLabel = this.add.text(padding + 8, currentY + 288, 'POTENTIAL: $0M', {
+            fontSize: '22px',
+            fontFamily: '"VT323", monospace',
+            color: '#66f2ff',
             wordWrap: { width: innerWidth - 24 }
         }).setOrigin(0, 0);
         const budgetBarWidth = innerWidth - 26;
@@ -780,15 +780,15 @@ export default class PachinkoScene extends Phaser.Scene {
         this.sidebar.add([statsBox, this.productionCostLabel, this.netBudgetLabel, this.ratingHUD, this.scoreLabel, this.ballLabel, this.droppedLabel, this.expectedReelsLabel, this.padInventoryLabel, this.liveTakeValueLabel, this.activeReelValuesText, this.progressFrame, this.progressFill]);
         currentY += statsBoxHeight + 16;
 
-        this.padModeButton = UI.createChunkyButton(this, sidebarWidth / 2, currentY + 28, sidebarWidth - 36, 56, 'PLACE PADS', () => {
+        this.padModeButton = UI.createChunkyButton(this, sidebarWidth / 2, currentY + 32, sidebarWidth - 36, 64, 'SET UP PADS', () => {
             this.togglePadMode();
-        }, 'TACTICAL SETUP');
+        }, 'PLAN YOUR SHOT');
         this.sidebar.add(this.padModeButton);
-        currentY += 72;
+        currentY += 80;
 
-        this.wrapButton = UI.createChunkyButton(this, sidebarWidth / 2, currentY + 24, sidebarWidth - 56, 48, 'SELL EXTRAS', () => {
+        this.wrapButton = UI.createChunkyButton(this, sidebarWidth / 2, currentY + 24, sidebarWidth - 56, 56, 'SELL REELS', () => {
             this.handleSellExtras();
-        }, 'WRAP THE SHOOT');
+        }, 'COMPLETE FILM');
         this.sidebar.add(this.wrapButton);
         this.wrapButton.setAlpha(0.45);
         this.wrapButton.disableInteractive?.();
@@ -981,7 +981,7 @@ export default class PachinkoScene extends Phaser.Scene {
             this.productionCostLabel.setColor(productionCost > 0 ? '#ff9c7a' : '#666666');
         }
         if (this.liveTakeValueLabel) {
-            this.liveTakeValueLabel.setText(`LIVE TAKE: ${GameState.formatMillions(liveTakePotential)}`);
+            this.liveTakeValueLabel.setText(`POTENTIAL: ${GameState.formatMillions(liveTakePotential)}`);
             this.liveTakeValueLabel.setColor(liveTakePotential > 0 ? '#66f2ff' : '#666666');
         }
         if (this.projectionLabel) {
@@ -989,15 +989,10 @@ export default class PachinkoScene extends Phaser.Scene {
             this.projectionLabel.setColor(projectedNet >= safeTarget ? '#66ff88' : '#f5c518');
         }
         if (this.activeReelValuesText) {
-            const liveReels = this.activeBalls.map((ball) => `R${ball.ballId}: ${GameState.formatMillions(this.getBallCurrentPotential(ball))}`);
-            if (!liveReels.length) {
-                this.activeReelValuesText.setText('REELS LIVE: none');
+            if (this.activeBalls.length === 0) {
+                this.activeReelValuesText.setText('REELS LIVE: 0');
             } else {
-                const reelLines = [];
-                for (let i = 0; i < liveReels.length; i += 2) {
-                    reelLines.push(liveReels.slice(i, i + 2).join('  |  '));
-                }
-                this.activeReelValuesText.setText(`REELS LIVE:\n${reelLines.join('\n')}`);
+                this.activeReelValuesText.setText(`REELS LIVE: ${this.activeBalls.length}`);
             }
         }
 
@@ -1011,26 +1006,46 @@ export default class PachinkoScene extends Phaser.Scene {
 
         // Removed score-based actor hiring loop as they are now physical items to collect
 
-        if (this.padModeButton?.list?.[1]) {
-            this.padModeButton.list[1].setText(this.padModeActive ? 'EDIT SET: ON' : 'PLACE PADS');
+        if (this.padModeButton) {
+            const padsDisabled = this.activeBalls.length > 0;
+            this.padModeButton.setAlpha(padsDisabled ? 0.45 : 1);
+            
+            // Interaction must be toggled on the hitTarget, not the container
+            const hitTarget = this.padModeButton.hitTarget;
+            if (hitTarget) {
+                if (padsDisabled) {
+                    hitTarget.disableInteractive();
+                } else {
+                    hitTarget.setInteractive({ useHandCursor: true });
+                }
+            }
+
+            if (this.padModeButton.list?.[1]) {
+                this.padModeButton.list[1].setText(this.padModeActive ? 'EDIT SET: ON' : 'SET UP PADS');
+            }
+            if (this.padModeButton.list?.[2]) {
+                this.padModeButton.list[2].setText(this.padModeActive ? 'TAP THE BOARD TO PLACE' : 'PLAN YOUR SHOT');
+            }
         }
-        if (this.padModeButton?.list?.[2]) {
-            this.padModeButton.list[2].setText(this.padModeActive ? 'TAP THE BOARD TO PLACE' : 'TACTICAL SETUP');
-        }
+
         if (this.wrapButton) {
-            const canWrap = this.readyToWrap && this.activeBalls.length === 0 && this.ballsRemaining > 0;
+            const canWrap = this.readyToWrap && this.ballsRemaining > 0;
             this.wrapButton.setAlpha(canWrap ? 1 : 0.45);
-            if (canWrap) {
-                this.wrapButton.setInteractive?.();
-            } else {
-                this.wrapButton.disableInteractive?.();
+            
+            const hitTarget = this.wrapButton.hitTarget;
+            if (hitTarget) {
+                if (canWrap) {
+                    hitTarget.setInteractive({ useHandCursor: true });
+                } else {
+                    hitTarget.disableInteractive();
+                }
             }
             if (this.wrapButton.list?.[1]) {
                 this.wrapButton.list[1].setText(`SELL ${this.ballsRemaining} REELS`);
             }
             if (this.wrapButton.list?.[2]) {
                 const saleValue = this.ballsRemaining * (this.levelData?.reelSaleValue || 0);
-                this.wrapButton.list[2].setText(canWrap ? `BONUS ${GameState.formatMillions(saleValue)}` : 'CLEAR GOAL TO CASH OUT');
+                this.wrapButton.list[2].setText(canWrap ? `BONUS ${GameState.formatMillions(saleValue)}` : 'COMPLETE FILM');
             }
         }
 
@@ -1605,7 +1620,7 @@ export default class PachinkoScene extends Phaser.Scene {
     }
 
     handleSellExtras() {
-        if (!this.readyToWrap || this.activeBalls.length > 0 || this.ballsRemaining <= 0) {
+        if (!this.readyToWrap || this.ballsRemaining <= 0) {
             return;
         }
 

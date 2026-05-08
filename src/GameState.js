@@ -1,4 +1,4 @@
-export const MAX_RUN_BUDGET = 10000; // $10,000M hard cap
+export const MAX_RUN_BUDGET = 1000000; // $1,000,000M hard cap
 
 export const GameState = {
     defaultAudioStats: {
