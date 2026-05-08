@@ -71,8 +71,14 @@ export default class BootScene extends Phaser.Scene {
             });
         });
 
+        this.load.crossOrigin = 'anonymous';
+
         this.load.on('loaderror', (file) => {
-            console.error('LOAD ERROR FOR:', file.src);
+            if (file.key && file.key.startsWith('poster_')) {
+                console.warn(`Poster load failed (skipping): ${file.src}`);
+            } else {
+                console.error('CRITICAL ASSET LOAD ERROR:', file.src);
+            }
         });
 
         this.load.on('progress', (value) => {
@@ -125,6 +131,34 @@ export default class BootScene extends Phaser.Scene {
             frameHeight: 286,
             margin: 0,
             spacing: 0
+        });
+
+        // --- Preload all movie posters globally ---
+        const directors = TMDB.getHardcodedDirectors();
+        const campaignData = TMDB.CAMPAIGN_DATA;
+        const tmdbBaseUrl = 'https://image.tmdb.org/t/p/w500';
+        
+        directors.forEach(director => {
+            const films = campaignData[director.name] || [];
+            films.forEach(film => {
+                if (film.poster_path) {
+                    const posterKey = `poster_${film.id}`;
+                    
+                    // Skip broken placeholders and obviously invalid strings
+                    const isInvalid = film.poster_path.includes('v9p7S7') || 
+                                     film.poster_path.includes('p7S7pS7') || 
+                                     film.poster_path.includes('s8S8S8') ||
+                                     film.poster_path.includes('65D2aE0j');
+                    
+                    if (!isInvalid) {
+                        const fullUrl = film.poster_path.startsWith('http')
+                            ? film.poster_path
+                            : `${tmdbBaseUrl}${film.poster_path}`;
+                            
+                        this.load.image(posterKey, fullUrl);
+                    }
+                }
+            });
         });
     }
 

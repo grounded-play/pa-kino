@@ -452,14 +452,15 @@ export const UI = {
             if (!gameObject || out.has(gameObject)) return out;
             out.add(gameObject);
             
-            // Follow container children
-            if (gameObject.type === 'Container' && Array.isArray(gameObject.list)) {
+            // Follow children for Containers and similar
+            if (gameObject.list && Array.isArray(gameObject.list)) {
                 gameObject.list.forEach((child) => collectDescendants(child, out));
             }
             
-            // Follow detached hitTargets or background plates linked to this object
+            // Follow detached components or background plates
             if (gameObject.hitTarget) collectDescendants(gameObject.hitTarget, out);
             if (gameObject.bg) collectDescendants(gameObject.bg, out);
+            if (gameObject.handle) collectDescendants(gameObject.handle, out); // For sliders
             
             return out;
         };

@@ -61,7 +61,7 @@ export default class PachinkoScene extends Phaser.Scene {
         }
 
         this.invalidRunData = !this.rawFilmData;
-        this.currentPosterKey = GameState.currentRun.currentPosterKey || 'current_poster';
+        this.currentPosterKey = this.rawFilmData?.id ? `poster_${this.rawFilmData.id}` : 'current_poster';
         const margin = 60;
         const GAME_WIDTH = this.scale.width;
         const safeWidth = GAME_WIDTH - (margin * 2);
@@ -83,9 +83,8 @@ export default class PachinkoScene extends Phaser.Scene {
             console.error(`Asset failed to load: ${fileObj?.src || fileObj?.url || fileObj?.key || 'unknown asset'}`);
         });
 
-        if (this.levelData?.posterPath) {
-            this.load.image(this.currentPosterKey, this.levelData.posterPath);
-        }
+        // All posters are preloaded in BootScene.js to ensure stability.
+        // Lead cast is still fetched on the fly as it is director-specific and large.
 
         this.leadCast.forEach((actor, index) => {
             if (actor.profilePath) {

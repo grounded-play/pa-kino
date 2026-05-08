@@ -392,16 +392,6 @@ export default class DirectorSelectScene extends Phaser.Scene {
             const currentMovie = films[0];
             const nextMovie = films[1];
 
-            const currentKey = `poster_${currentMovie.id}`;
-            const nextKey = nextMovie ? `poster_${nextMovie.id}` : null;
-
-            if (currentMovie && currentMovie.poster_path && !this.textures.exists(currentKey)) {
-                this.load.image(currentKey, `https://image.tmdb.org/t/p/w500${currentMovie.poster_path}`);
-            }
-            if (nextMovie && nextMovie.poster_path && nextKey && !this.textures.exists(nextKey)) {
-                this.load.image(nextKey, `https://image.tmdb.org/t/p/w500${nextMovie.poster_path}`);
-            }
-
             const proceedWithReveal = () => {
                 const profilePath = profileData.profile_path
                     ? `https://image.tmdb.org/t/p/w200${profileData.profile_path}`
@@ -410,8 +400,8 @@ export default class DirectorSelectScene extends Phaser.Scene {
                 this.pendingSelection = {
                     ...selectedDirector,
                     films,
-                    currentPosterKey: currentKey,
-                    nextPosterKey: nextKey,
+                    currentPosterKey: `poster_${currentMovie.id}`,
+                    nextPosterKey: nextMovie ? `poster_${nextMovie.id}` : null,
                     profilePath,
                     birthday: profileData.birthday,
                     placeOfBirth: profileData.place_of_birth,
@@ -425,13 +415,7 @@ export default class DirectorSelectScene extends Phaser.Scene {
                 this.isSpinning = false;
             };
 
-            // Start loader if there are new items to load
-            if (this.load.list.size > 0) {
-                this.load.once('complete', proceedWithReveal);
-                this.load.start();
-            } else {
-                proceedWithReveal();
-            }
+            proceedWithReveal();
 
         } catch (error) {
             console.error('Drafting fallback triggered:', error);
@@ -723,35 +707,16 @@ export default class DirectorSelectScene extends Phaser.Scene {
                 || film.posterPath
                 || (film.poster_path ? `https://image.tmdb.org/t/p/w500${film.poster_path}` : null);
 
-            if (unlocked && posterPath) {
-                const textureKey = `roadmap_poster_${film.id}`;
-
-                if (!this.textures.exists(textureKey) && !this.pendingRoadmapPosterLoads?.has(textureKey)) {
-                    this.pendingRoadmapPosterLoads ||= new Set();
-                    this.pendingRoadmapPosterLoads.add(textureKey);
-                    this.load.image(textureKey, posterPath);
-                    this.load.once('complete', () => {
-                        this.pendingRoadmapPosterLoads?.delete(textureKey);
-                        if (this.pendingSelection?.name === selection.name) {
-                            this.renderRoadmap(selection);
-                        }
-                    });
-                    this.load.start();
-                }
-
+            if (unlocked) {
+                const textureKey = `poster_${film.id}`;
                 if (this.textures.exists(textureKey)) {
                     const poster = this.add.image(0, 6, textureKey).setOrigin(0.5);
-                    const scale = Math.min(62 / poster.width, 58 / poster.height);
+                    const scale = Math.min(64 / poster.width, 64 / poster.height);
                     poster.setScale(scale);
                     card.add([box, poster, leftDot, stepLabel]);
                 } else {
-                    const loadingLabel = this.add.text(0, 18, 'LOADING', {
-                        fontSize: '14px',
-                        fontFamily: '"VT323", monospace',
-                        color: '#fff4cc',
-                        align: 'center'
-                    }).setOrigin(0.5);
-                    card.add([box, leftDot, stepLabel, loadingLabel]);
+                    const placeholder = this.add.rectangle(0, 6, 50, 50, 0x333333);
+                    card.add([box, placeholder, leftDot, stepLabel]);
                 }
             } else {
                 const label = this.add.text(0, 18, unlocked ? film.title.toUpperCase() : 'LOCKED', {
@@ -782,10 +747,14 @@ export default class DirectorSelectScene extends Phaser.Scene {
     }
 
     setActionButtonsEnabled(enabled) {
+        // Guard: If settings is open, don't re-enable underlying UI buttons
+        const isModalOpen = this.settingsOverlay && this.settingsOverlay.visible;
+        const finalEnabled = isModalOpen ? false : enabled;
+
         const updateTarget = (button) => {
             const hitTarget = button?.hitTarget || button;
             if (hitTarget?.input) {
-                hitTarget.input.enabled = enabled;
+                hitTarget.input.enabled = finalEnabled;
             }
         };
 
