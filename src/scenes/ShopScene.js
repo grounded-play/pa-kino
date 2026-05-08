@@ -91,124 +91,119 @@ export default class ShopScene extends Phaser.Scene {
         borders.lineBetween(margin + boardWidth, margin, margin + boardWidth, margin + safeHeight);
         borders.setDepth(6);
 
-        // ── Board area: section title ─────────────────────────────────────────────
-        this.add.text(margin + boardWidth / 2, margin + 40, 'PRE-PRODUCTION UPGRADES', {
-            fontSize: '38px',
-            fontFamily: '"VT323", monospace',
-            color: '#ffcc00',
-            align: 'center'
+        this.add.text(margin + boardWidth / 2, margin + 45, 'PRE-PRODUCTION STORE', {
+            fontSize: '44px', fontFamily: '"VT323", monospace', color: '#ffcc00', align: 'center'
         }).setOrigin(0.5, 0).setDepth(10);
 
-        this.budgetLabel = this.add.text(margin + boardWidth / 2, margin + 85, `BUDGET AVAILABLE: ${GameState.formatMillions(run.score)}`, {
-            fontSize: '28px',
-            fontFamily: '"VT323", monospace',
-            color: '#66f2ff',
-            align: 'center'
+        this.budgetLabel = this.add.text(margin + boardWidth / 2, margin + 95, `BUDGET AVAILABLE: ${GameState.formatMillions(run.score)}`, {
+            fontSize: '32px', fontFamily: '"VT323", monospace', color: '#66f2ff'
         }).setOrigin(0.5, 0).setDepth(10);
 
-        // ── Board area: upgrade cards ─────────────────────────────────────────────
-        const cardWidth = Math.min(520, boardWidth - 120);
-        const cardHeight = 120; // Even tighter
-        const cardGap = 15;
-        const firstCardCenter = margin + 140 + cardHeight / 2;
+        // ── Board area: stacked upgrade cards ────────────────────────────
+        const cardWidth = 580;
+        const cardHeight = 85;
+        const cardGap = 10;
+        const startY = margin + 140;
 
         this.offeredUpgrades.forEach((upgrade, index) => {
-            const cardY = firstCardCenter + index * (cardHeight + cardGap);
-            const container = this.add.container(margin + boardWidth / 2, cardY);
-
-            const bg = this.add.rectangle(0, 0, cardWidth, cardHeight, 0x222222).setStrokeStyle(4, 0x444444);
-            const filmStrip = this.add.rectangle(0, -cardHeight / 2 + 16, cardWidth, 32, 0x000000);
-            const title = this.add.text(-cardWidth / 2 + 28, -cardHeight / 2 + 48, upgrade.title, {
-                fontSize: '26px', fontFamily: '"VT323", monospace', color: '#ffcc00', align: 'left',
-                wordWrap: { width: cardWidth - 210 }
-            }).setOrigin(0, 0.5);
-            const desc = this.add.text(-cardWidth / 2 + 28, 6, upgrade.desc, {
-                fontSize: '19px', fontFamily: '"VT323", monospace', color: '#cccccc', align: 'left',
-                wordWrap: { width: cardWidth - 210 }
-            }).setOrigin(0, 0.5);
-
-            const costBtn = UI.createChunkyButton(this, cardWidth / 2 - 110, 0, 180, 56,
+            const y = startY + index * (cardHeight + cardGap);
+            const container = this.add.container(margin + boardWidth / 2, y);
+            const bg = this.add.rectangle(0, 0, cardWidth, cardHeight, 0x1a1a1a).setStrokeStyle(2, 0x444444);
+            const title = this.add.text(-cardWidth / 2 + 20, -cardHeight / 2 + 18, upgrade.title.toUpperCase(), {
+                fontSize: '20px', fontFamily: '"VT323", monospace', color: '#ffcc00'
+            });
+            const desc = this.add.text(-cardWidth / 2 + 20, 8, upgrade.desc, {
+                fontSize: '16px', fontFamily: '"VT323", monospace', color: '#aaaaaa',
+                wordWrap: { width: cardWidth - 220 }
+            });
+            const costBtn = UI.createChunkyButton(this, cardWidth / 2 - 100, 0, 160, 42,
                 GameState.formatMillions(upgrade.cost), () => this.purchaseUpgrade(upgrade, container));
-
-            container.add([bg, filmStrip, title, desc, costBtn]);
+            
+            container.add([bg, title, desc, costBtn]);
             container.costBtn = costBtn;
             container.setDepth(10);
-            container.setScale(0);
-
-            this.tweens.add({
-                targets: container,
-                scaleX: 1, scaleY: 1,
-                duration: 600,
-                delay: index * 200,
-                ease: 'Back.easeOut'
-            });
         });
 
-        // ── "NEXT FILMING >" — anchored below last card ───────────────────────────
-        const lastCardBottom = firstCardCenter + 2 * (cardHeight + cardGap) + cardHeight / 2;
-        const nextBtnY = lastCardBottom + 60;
-
-        const nextBtn = UI.createChunkyButton(this, margin + boardWidth / 2, nextBtnY, 300, 70, 'NEXT FILMING >', () => {
-            if (this.scale.fullscreenSupported && !this.scale.isFullscreen) {
-                this.scale.startFullscreen();
-            }
-            this.scene.start('PachinkoScene');
-        }).setDepth(10);
-
-        // ── Board area: Large Director Section ──────────────────────────────────
-        const directorY = nextBtnY + 160; // Moved down more precisely
-        const directorBoxW = 640;
-        const portraitW = 140; // Slightly smaller to ensure fit
-        const portraitH = 190;
-
-        // Director Frame
+        // ── Board area: Director & Premiere (Stacked properly) ──────────────────
+        const directorY = margin + 510; // Moved up slightly to clear results
+        const portraitW = 160;
+        const portraitH = 220;
         const frameX = margin + boardWidth / 2;
+
         const portraitCard = this.add.rectangle(frameX, directorY, portraitW + 30, portraitH + 40, 0x20150b, 1)
             .setStrokeStyle(4, 0xffd27a).setDepth(10);
         const portraitMatte = this.add.rectangle(frameX, directorY - 10, portraitW + 10, portraitH + 10, 0x111111, 1)
             .setStrokeStyle(2, 0xffaa00).setDepth(10);
 
-        // Add Director Sprite
         if (this.textures.exists('director_portraits')) {
             const frameToken = this._resolveDirectorPortraitFrame(run);
-            const portrait = this.add.sprite(frameX, directorY - 15, 'director_portraits'); // Adjusted Y for centering
+            const portrait = this.add.sprite(frameX, directorY - 15, 'director_portraits');
             portrait.setTexture('director_portraits', frameToken);
             portrait.setDisplaySize(portraitW, portraitH);
             portrait.setDepth(11);
         }
 
-        // Blue Box beneath director
-        const blueBoxY = directorY + 145;
-        const blueBox = this.add.rectangle(frameX, blueBoxY, directorBoxW, 90, 0x003366, 0.9)
+        // Blue Box (Dialogue)
+        const blueBoxY = directorY + 160;
+        const blueBoxW = 640;
+        const blueBox = this.add.rectangle(frameX, blueBoxY, blueBoxW, 90, 0x003366, 0.95)
             .setStrokeStyle(3, 0x66ccff).setDepth(10);
         
-        const directorNameText = this.add.text(frameX, blueBoxY - 26, (run.directorName || 'UNKNOWN').toUpperCase(), {
-            fontSize: '26px', fontFamily: '"VT323", monospace', color: '#ffcc00', align: 'center'
+        this.add.text(frameX, blueBoxY - 26, (run.directorName || 'UNKNOWN').toUpperCase(), {
+            fontSize: '26px', fontFamily: '"VT323", monospace', color: '#ffcc00'
         }).setOrigin(0.5).setDepth(11);
 
-        const ratioValue = run.lastRating || 0;
-        const currentDialogue = this._getDialogue(ratioValue, run.directorName);
-        const currentTraitLine = run.traitLines?.[0] || '';
+        const rating10 = this._calculateRating10(run);
+        const dialogue = this._getDialogue(rating10 / 6, run.directorName);
+        this.add.text(frameX, blueBoxY + 12, `"${dialogue}"`, {
+            fontSize: '18px', fontFamily: '"VT323", monospace', color: '#ffffff', align: 'center',
+            wordWrap: { width: blueBoxW - 40 }
+        }).setOrigin(0.5).setDepth(11);
+
+        // ── Board area: Review & Details ──────────────────────────────────────────
+        const reviewY = blueBoxY + 185;
+        const completedFilm = run.completedFilms[run.completedFilms.length - 1] || null;
+        const currentPosterKey = completedFilm?.id ? `poster_${completedFilm.id}` : null;
         
-        const infoText = this.add.text(frameX, blueBoxY + 12, `"${currentDialogue}"`, {
-            fontSize: '19px', fontFamily: '"VT323", monospace', color: '#ffffff', align: 'center',
-            wordWrap: { width: directorBoxW - 40 }
+        // Poster on left
+        const posterW = 160;
+        const posterH = 240;
+        const posterX = frameX - 180;
+        const posterFrame = this.add.rectangle(posterX, reviewY, posterW + 16, posterH + 16, 0x000000)
+            .setStrokeStyle(3, 0x444444).setDepth(10);
+        if (currentPosterKey && this.textures.exists(currentPosterKey)) {
+            this.add.image(posterX, reviewY, currentPosterKey).setDisplaySize(posterW, posterH).setDepth(11);
+        }
+
+        // Critic Rating Centered below poster
+        const ratingY = reviewY + posterH / 2 + 40;
+        this.add.text(posterX, ratingY, `CRITIC RATING: ${rating10.toFixed(1)} / 10`, {
+            fontSize: '28px', fontFamily: '"VT323", monospace', color: '#ffcc00'
         }).setOrigin(0.5).setDepth(11);
 
-        // ── Board area: Level Wrap Tally ──────────────────────────────────────────
-        const tallyY = blueBoxY + 80;
-        const tallyW = directorBoxW;
-        const tallyG = this.add.graphics();
-        tallyG.fillStyle(0x0a0a0a, 0.8);
-        tallyG.fillRect(frameX - tallyW / 2, tallyY - 30, tallyW, 60);
-        tallyG.lineStyle(1, 0x333333, 1);
-        tallyG.strokeRect(frameX - tallyW / 2, tallyY - 30, tallyW, 60);
-        tallyG.setDepth(10);
+        // Breakdown on right
+        const detailsX = frameX + 20;
+        const detailsY = reviewY - 110;
+        this.add.text(detailsX, detailsY, 'WORLD PREMIERE RESULTS', {
+            fontSize: '28px', fontFamily: '"VT323", monospace', color: '#ffcc00'
+        }).setOrigin(0, 0).setDepth(11);
 
-        const tallyText = `REELS: ${run.reelDrops} / ${run.lastExpectedReels}   •   ACTORS: ${run.lastCastCount || 0}   •   RATING: ${ratioValue.toFixed(1)}`;
-        this.add.text(frameX, tallyY, tallyText, {
-            fontSize: '22px', fontFamily: '"VT323", monospace', color: '#aaaaaa', align: 'center'
-        }).setOrigin(0.5).setDepth(11);
+        const breakdown = this._getBreakdown(run);
+        let dy = detailsY + 45;
+        breakdown.forEach(item => {
+            this.add.text(detailsX, dy, item.label, {
+                fontSize: '20px', fontFamily: '"VT323", monospace', color: '#aaaaaa'
+            }).setDepth(11);
+            this.add.text(detailsX + 300, dy, item.value, {
+                fontSize: '20px', fontFamily: '"VT323", monospace', color: item.pts > 0 ? '#66ff88' : (item.pts < 0 ? '#ff6666' : '#666666'), align: 'right'
+            }).setOrigin(1, 0).setDepth(11);
+            dy += 28;
+        });
+
+        // Next Filming Button
+        const nextBtn = UI.createChunkyButton(this, frameX, height - 90, 320, 56, 'NEXT FILMING >', () => {
+            this.scene.start('PachinkoScene');
+        }).setDepth(10);
 
         // ── Sidebar: Run Recap ────────────────────────────────────────────────────
         const sidebar = this.add.container(margin + boardWidth, margin).setDepth(50);
@@ -237,7 +232,7 @@ export default class ShopScene extends Phaser.Scene {
             settingsOverlay.openModal();
         });
 
-        this._buildRunRecap(sidebar, run, nextFilm, nextPosterKey, sidebarWidth, innerSidebarW, pad);
+        this._buildShopSidebar(sidebar, run, nextFilm, nextPosterKey, sidebarWidth, innerSidebarW, pad);
 
         sidebar.add(settingsBtn);
         if (typeof sidebar.bringToTop === 'function') {
@@ -249,6 +244,67 @@ export default class ShopScene extends Phaser.Scene {
         if (!this.sound.mute && this.cache.audio.exists('sfx_oscar')) {
             this.sound.play('sfx_oscar', { volume: 0.3 * (GameState.getAudioSettings(this).sfxVolume ?? 1) });
         }
+    }
+
+    _calculateRating10(run) {
+        const actual = run.reelDrops || 0;
+        const expected = run.lastExpectedReels || 1;
+        const net = run.lastNetRoundScore || 0;
+        const target = run.lastTargetScore || 1;
+        const actors = run.lastCastCount || 0;
+        
+        let score = 0;
+        // All or Nothing: Hit Target
+        if (net >= 0) score += 2; 
+
+        // All or Nothing: Reel Plan (penalty if over)
+        if (actual <= expected) {
+            score += 3; 
+            score += Math.max(0, expected - actual); // Efficiency bonus still applies
+        } else {
+            score -= (actual - expected); // -1 per reel over
+        }
+
+        // All or Nothing: Ensemble (Must get all 3)
+        if (actors >= 3) {
+            score += 3;
+        }
+        
+        if (net >= target * 1.5) score += 1;
+        if (net >= target * 2.0) score += 1;
+        
+        return Math.max(0, Math.min(10, score));
+    }
+
+    _getBreakdown(run) {
+        const actual = run.reelDrops || 0;
+        const expected = run.lastExpectedReels || 1;
+        const net = run.lastNetRoundScore || 0;
+        const target = run.lastTargetScore || 1;
+        const actors = run.lastCastCount || 0;
+
+        const items = [];
+        items.push({ label: 'TARGET REACHED', value: net >= 0 ? '2/2' : '0/2', pts: net >= 0 ? 2 : 0 });
+        items.push({ label: 'ON REEL PLAN', value: actual <= expected ? '3/3' : '0/3', pts: actual <= expected ? 3 : 0 });
+        
+        if (actual < expected) {
+            items.push({ label: 'EFFICIENCY BONUS', value: `+${expected - actual}`, pts: expected - actual });
+        } else if (actual > expected) {
+            items.push({ label: 'OVER-REEL PENALTY', value: `-${actual - expected}`, pts: -(actual - expected) });
+        }
+
+        // Must have all 3 for points
+        items.push({ 
+            label: 'ENSEMBLE CAST', 
+            value: actors >= 3 ? '3/3' : `${actors}/3`, 
+            pts: actors >= 3 ? 3 : 0 
+        });
+        
+        if (net >= target * 1.5) {
+            items.push({ label: 'PROFIT BONUS', value: net >= target * 2.0 ? '+2' : '+1', pts: net >= target * 2.0 ? 2 : 1 });
+        }
+        
+        return items;
     }
 
     _getRatingInfo(ratio) {
@@ -272,142 +328,28 @@ export default class ShopScene extends Phaser.Scene {
         return reelDrops < 6 ? SUGGESTIONS.extra_balls : SUGGESTIONS.big_explosion;
     }
 
-    _buildRunRecap(sidebar, run, nextFilm, nextPosterKey, sidebarWidth, innerSidebarW, pad) {
-        const ratio = run.lastRating || 0;
-        const rating = this._getRatingInfo(ratio);
-        const filmsCompleted = run.currentFilmIndex || 0;
-        const totalFilms = run.filmography?.length || 5;
-        const suggestion = this._getSuggestion(ratio, run.reelDrops || 0);
-        const dialogue = this._getDialogue(ratio, run.directorName);
-
-        // Sidebar background
+    _buildShopSidebar(sidebar, run, nextFilm, nextPosterKey, sidebarWidth, innerSidebarW, pad) {
         const { height } = this.scale;
         const safeHeight = height - 120;
         sidebar.add(this.add.rectangle(sidebarWidth / 2, safeHeight / 2, sidebarWidth, safeHeight, 0x0d0d0d, 1));
-
-        let sy = 178;
-
-        // ── Header ───────────────────────────────────────────────────────────────
-        sidebar.add(this.add.text(sidebarWidth / 2, sy, 'PRODUCTION WRAP', {
-            fontSize: '30px', fontFamily: '"VT323", monospace', color: '#ffaa00', align: 'center'
+        
+        let sy = 120; // Lowered to clear settings button
+        sidebar.add(this.add.text(sidebarWidth / 2, sy, 'RUN SUMMARY', {
+            fontSize: '32px', fontFamily: '"VT323", monospace', color: '#ffaa00'
         }).setOrigin(0.5, 0));
-        sy += 42;
+        sy += 65;
 
-        sidebar.add(this._divider(pad, sy, sidebarWidth - pad));
-        sy += 14;
-
-        // ── Rating Stamp ─────────────────────────────────────────────────────────
-        const stampH = 84;
-        const stampW = sidebarWidth - pad * 2;
-        const stampG = this.add.graphics();
-        stampG.fillStyle(rating.bg, 1);
-        stampG.fillRect(pad, sy, stampW, stampH);
-        stampG.lineStyle(3, rating.border, 1);
-        stampG.strokeRect(pad, sy, stampW, stampH);
-        stampG.lineStyle(1, rating.border, 0.3);
-        stampG.strokeRect(pad + 4, sy + 4, stampW - 8, stampH - 8);
-        sidebar.add(stampG);
-
-        const ratingFs = rating.label.length > 11 ? '28px' : '38px';
-        sidebar.add(this.add.text(sidebarWidth / 2, sy + stampH / 2, rating.label, {
-            fontSize: ratingFs, fontFamily: '"VT323", monospace', color: rating.color, align: 'center'
-        }).setOrigin(0.5));
-        sy += stampH + 14;
-
-        sidebar.add(this._divider(pad, sy, sidebarWidth - pad));
-        sy += 14;
-
-        // ── Stat Block ────────────────────────────────────────────────────────────
         const statRows = [
-            { label: 'TARGET', value: GameState.formatMillions(run.lastTargetScore || 0), color: '#aaaaaa' },
-            { label: 'GROSS', value: GameState.formatMillions(run.lastGrossRoundScore || run.lastRoundScore || 0), color: '#66f2ff' },
-            { label: 'COSTS', value: GameState.formatMillions(run.lastProductionCost || 0), color: '#ff9c7a' },
-            { label: 'NET', value: GameState.formatMillions(run.lastNetRoundScore || run.lastRoundScore || 0), color: ratio >= 1.0 ? '#66ff88' : '#ff7777' },
-            { label: 'FILMS',  value: `${filmsCompleted}/${totalFilms}`, color: '#ffffff' }
+            { label: 'TOTAL FILMS', value: `${run.currentFilmIndex}/${run.filmography.length}` },
+            { label: 'LIFETIME BOX', value: GameState.formatMillions(run.score) },
+            { label: 'REELS USED', value: run.reelDrops }
         ];
 
-        const statBoxH = statRows.length * 32 + 18;
-        const statBoxG = this.add.graphics();
-        statBoxG.fillStyle(0x0f0f0f, 1);
-        statBoxG.fillRect(pad, sy, sidebarWidth - pad * 2, statBoxH);
-        statBoxG.lineStyle(1, 0x333333, 1);
-        statBoxG.strokeRect(pad, sy, sidebarWidth - pad * 2, statBoxH);
-        sidebar.add(statBoxG);
-
-        sy += 8;
         statRows.forEach(row => {
-            sidebar.add(this.add.text(pad + 8, sy, row.label, {
-                fontSize: '24px', fontFamily: '"VT323", monospace', color: '#666666'
-            }).setOrigin(0, 0));
-            sidebar.add(this.add.text(sidebarWidth - pad - 8, sy, row.value, {
-                fontSize: '24px', fontFamily: '"VT323", monospace', color: row.color, align: 'right'
-            }).setOrigin(1, 0));
-            sy += 32;
+            sidebar.add(this.add.text(pad, sy, row.label, { fontSize: '24px', fontFamily: '"VT323", monospace', color: '#666666' }));
+            sidebar.add(this.add.text(sidebarWidth - pad, sy, row.value, { fontSize: '24px', fontFamily: '"VT323", monospace', color: '#cccccc', align: 'right' }).setOrigin(1, 0));
+            sy += 35;
         });
-        sy += 20;
-
-        // ── Suggestion ────────────────────────────────────────────────────────────
-        if (suggestion) {
-            sidebar.add(this._divider(pad, sy, sidebarWidth - pad));
-            sy += 12;
-
-            sidebar.add(this.add.text(sidebarWidth / 2, sy, 'DIRECTOR SUGGESTS', {
-                fontSize: '20px', fontFamily: '"VT323", monospace', color: '#888888', align: 'center'
-            }).setOrigin(0.5, 0));
-            sy += 26;
-
-            const sgG = this.add.graphics();
-            sgG.fillStyle(0x181818, 1);
-            sgG.fillRect(pad, sy, innerSidebarW, 66);
-            sgG.lineStyle(1, 0x444444, 1);
-            sgG.strokeRect(pad, sy, innerSidebarW, 66);
-            sgG.lineStyle(3, rating.border, 0.6);
-            sgG.lineBetween(pad, sy, pad, sy + 66);
-            sidebar.add(sgG);
-
-            sidebar.add(this.add.text(pad + 10, sy + 6, suggestion.title, {
-                fontSize: '22px', fontFamily: '"VT323", monospace', color: rating.color
-            }).setOrigin(0, 0));
-            sidebar.add(this.add.text(pad + 10, sy + 27, suggestion.desc, {
-                fontSize: '17px', fontFamily: '"VT323", monospace', color: '#777777',
-                wordWrap: { width: innerSidebarW - 16 }
-            }).setOrigin(0, 0));
-            sy += 84;
-        }
-
-        // ── Next Feature ──────────────────────────────────────────────────────────
-        if (nextFilm) {
-            sidebar.add(this._divider(pad, sy, sidebarWidth - pad));
-            sy += 16;
-
-            sidebar.add(this.add.text(sidebarWidth / 2, sy, 'NEXT FEATURE', {
-                fontSize: '22px', fontFamily: '"VT323", monospace', color: '#66f2ff', align: 'center'
-            }).setOrigin(0.5, 0));
-            sy += 38;
-
-            const posterW = innerSidebarW - 8;
-            const posterH = Math.min(324, Math.round(posterW * 1.5));
-            const posterFrame = this.add.rectangle(sidebarWidth / 2, sy + posterH / 2, innerSidebarW, posterH, 0x0a0a0a)
-                .setStrokeStyle(2, 0x445566);
-            sidebar.add(posterFrame);
-
-            if (nextPosterKey && this.textures.exists(nextPosterKey)) {
-                const poster = this.add.image(sidebarWidth / 2, sy + posterH / 2, nextPosterKey);
-                this._fitImageWithin(poster, posterW, posterH - 10);
-                sidebar.add(poster);
-            } else {
-                sidebar.add(this.add.text(sidebarWidth / 2, sy + posterH / 2, 'COMING SOON', {
-                    fontSize: '22px', fontFamily: '"VT323", monospace', color: '#333333', align: 'center'
-                }).setOrigin(0.5));
-            }
-            sy += posterH + 14;
-
-            sidebar.add(this.add.text(sidebarWidth / 2, sy, (nextFilm.title || '').toUpperCase(), {
-                fontSize: '21px', fontFamily: '"VT323", monospace', color: '#cccccc', align: 'center',
-                wordWrap: { width: innerSidebarW }
-            }).setOrigin(0.5, 0));
-            sy += 58;
-        }
     }
 
     _resolveDirectorPortraitFrame(run) {

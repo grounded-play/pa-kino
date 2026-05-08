@@ -798,31 +798,25 @@ export default class PachinkoScene extends Phaser.Scene {
         };
 
         const castDividerY = castSectionY + 34;
-        const castDivider = this.add.graphics();
-        castDivider.lineStyle(1, 0x444444, 0.8);
-        castDivider.lineBetween(padding, castDividerY, sidebarWidth - padding, castDividerY);
-        this.sidebar.add(castDivider);
-
-        this.sidebar.add(this.add.text(sidebarWidth / 2, castDividerY + 10, 'ENSEMBLE BOARD', {
+        
+        // Header above the line
+        this.sidebar.add(this.add.text(sidebarWidth / 2, castDividerY - 25, 'ENSEMBLE BOARD', {
             fontSize: '22px',
             fontFamily: '"VT323", monospace',
             color: '#ffaa00',
             align: 'center'
         }).setOrigin(0.5, 0));
 
-        this.castListText = this.add.text(sidebarWidth / 2, castDividerY + 38, 'Waiting on the ensemble...', {
-            fontSize: '16px',
-            fontFamily: '"VT323", monospace',
-            color: '#888888',
-            align: 'center',
-            wordWrap: { width: innerWidth - 10 }
-        }).setOrigin(0.5, 0);
-        this.sidebar.add(this.castListText);
+        const castDivider = this.add.graphics();
+        castDivider.lineStyle(1, 0x444444, 0.8);
+        castDivider.lineBetween(padding, castDividerY, sidebarWidth - padding, castDividerY);
+        this.sidebar.add(castDivider);
 
-        this.castRowY = castDividerY + 84;
+        // Slots below the line
+        this.castRowY = castDividerY + 60;
         this.castAnchorPositions = [sidebarWidth / 2 - 64, sidebarWidth / 2, sidebarWidth / 2 + 64];
         this.castSlotLights = this.castAnchorPositions.map((x) => {
-            const light = this.add.circle(x, castDividerY + 72, 7, 0x443300, 0.95).setStrokeStyle(2, 0x775500);
+            const light = this.add.circle(x, castDividerY + 45, 7, 0x443300, 0.95).setStrokeStyle(2, 0x775500);
             this.sidebar.add(light);
             return light;
         });
