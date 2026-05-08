@@ -60,6 +60,7 @@ export const GameState = {
         lastReelsOver: 0,
         lastTargetScore: 0,
         lastRating: 0,
+        lastCastCount: 0,
         ballStats: { reel: 0, vhs: 0, dvd: 0 },
         inventory: {
             bouncePads: 3
@@ -95,6 +96,7 @@ export const GameState = {
             lastReelsOver: 0,
             lastTargetScore: 0,
             lastRating: 0,
+            lastCastCount: 0,
             ballStats: { reel: 0, vhs: 0, dvd: 0 },
             inventory: {
                 bouncePads: 3
@@ -130,6 +132,7 @@ export const GameState = {
             lastReelsOver: 0,
             lastTargetScore: 0,
             lastRating: 0,
+            lastCastCount: 0,
             ballStats: { reel: 0, vhs: 0, dvd: 0 },
             inventory: {
                 bouncePads: 3 + (modifiers.startingBouncePads || 0),

@@ -92,35 +92,42 @@ export default class ShopScene extends Phaser.Scene {
         borders.setDepth(6);
 
         // ── Board area: section title ─────────────────────────────────────────────
-        this.add.text(margin + boardWidth / 2, margin + 50, 'PRE-PRODUCTION UPGRADES', {
-            fontSize: '42px',
+        this.add.text(margin + boardWidth / 2, margin + 40, 'PRE-PRODUCTION UPGRADES', {
+            fontSize: '38px',
             fontFamily: '"VT323", monospace',
             color: '#ffcc00',
             align: 'center'
         }).setOrigin(0.5, 0).setDepth(10);
 
+        this.budgetLabel = this.add.text(margin + boardWidth / 2, margin + 85, `BUDGET AVAILABLE: ${GameState.formatMillions(run.score)}`, {
+            fontSize: '28px',
+            fontFamily: '"VT323", monospace',
+            color: '#66f2ff',
+            align: 'center'
+        }).setOrigin(0.5, 0).setDepth(10);
+
         // ── Board area: upgrade cards ─────────────────────────────────────────────
         const cardWidth = Math.min(520, boardWidth - 120);
-        const cardHeight = 140; // Tightened from 180
-        const cardGap = 20;    // Tightened from 30
-        const firstCardCenter = margin + 130 + cardHeight / 2;
+        const cardHeight = 120; // Even tighter
+        const cardGap = 15;
+        const firstCardCenter = margin + 140 + cardHeight / 2;
 
         this.offeredUpgrades.forEach((upgrade, index) => {
             const cardY = firstCardCenter + index * (cardHeight + cardGap);
             const container = this.add.container(margin + boardWidth / 2, cardY);
 
             const bg = this.add.rectangle(0, 0, cardWidth, cardHeight, 0x222222).setStrokeStyle(4, 0x444444);
-            const filmStrip = this.add.rectangle(0, -cardHeight / 2 + 18, cardWidth, 36, 0x000000);
-            const title = this.add.text(-cardWidth / 2 + 28, -cardHeight / 2 + 52, upgrade.title, {
-                fontSize: '28px', fontFamily: '"VT323", monospace', color: '#ffcc00', align: 'left',
+            const filmStrip = this.add.rectangle(0, -cardHeight / 2 + 16, cardWidth, 32, 0x000000);
+            const title = this.add.text(-cardWidth / 2 + 28, -cardHeight / 2 + 48, upgrade.title, {
+                fontSize: '26px', fontFamily: '"VT323", monospace', color: '#ffcc00', align: 'left',
                 wordWrap: { width: cardWidth - 210 }
             }).setOrigin(0, 0.5);
-            const desc = this.add.text(-cardWidth / 2 + 28, 8, upgrade.desc, {
-                fontSize: '20px', fontFamily: '"VT323", monospace', color: '#cccccc', align: 'left',
+            const desc = this.add.text(-cardWidth / 2 + 28, 6, upgrade.desc, {
+                fontSize: '19px', fontFamily: '"VT323", monospace', color: '#cccccc', align: 'left',
                 wordWrap: { width: cardWidth - 210 }
             }).setOrigin(0, 0.5);
 
-            const costBtn = UI.createChunkyButton(this, cardWidth / 2 - 110, 0, 180, 60,
+            const costBtn = UI.createChunkyButton(this, cardWidth / 2 - 110, 0, 180, 56,
                 GameState.formatMillions(upgrade.cost), () => this.purchaseUpgrade(upgrade, container));
 
             container.add([bg, filmStrip, title, desc, costBtn]);
@@ -133,12 +140,7 @@ export default class ShopScene extends Phaser.Scene {
                 scaleX: 1, scaleY: 1,
                 duration: 600,
                 delay: index * 200,
-                ease: 'Back.easeOut',
-                onStart: () => {
-                    if (!this.sound.mute && this.cache.audio.exists('sfx_click')) {
-                        this.sound.play('sfx_click', { volume: 0.5 * (GameState.getAudioSettings(this).sfxVolume ?? 1) });
-                    }
-                }
+                ease: 'Back.easeOut'
             });
         });
 
@@ -154,12 +156,12 @@ export default class ShopScene extends Phaser.Scene {
         }).setDepth(10);
 
         // ── Board area: Large Director Section ──────────────────────────────────
-        const directorY = nextBtnY + 180;
-        const directorBoxW = 600;
-        const portraitW = 160;
-        const portraitH = 210;
+        const directorY = nextBtnY + 160; // Moved down more precisely
+        const directorBoxW = 640;
+        const portraitW = 140; // Slightly smaller to ensure fit
+        const portraitH = 190;
 
-        // Director Frame (Larger)
+        // Director Frame
         const frameX = margin + boardWidth / 2;
         const portraitCard = this.add.rectangle(frameX, directorY, portraitW + 30, portraitH + 40, 0x20150b, 1)
             .setStrokeStyle(4, 0xffd27a).setDepth(10);
@@ -169,28 +171,43 @@ export default class ShopScene extends Phaser.Scene {
         // Add Director Sprite
         if (this.textures.exists('director_portraits')) {
             const frameToken = this._resolveDirectorPortraitFrame(run);
-            const portrait = this.add.sprite(frameX, directorY - 25, 'director_portraits');
+            const portrait = this.add.sprite(frameX, directorY - 15, 'director_portraits'); // Adjusted Y for centering
             portrait.setTexture('director_portraits', frameToken);
-            portrait.setDisplaySize(portraitW, portraitH + 20);
+            portrait.setDisplaySize(portraitW, portraitH);
             portrait.setDepth(11);
         }
 
         // Blue Box beneath director
-        const blueBoxY = directorY + 160;
-        const blueBox = this.add.rectangle(frameX, blueBoxY, directorBoxW, 110, 0x003366, 0.9)
+        const blueBoxY = directorY + 145;
+        const blueBox = this.add.rectangle(frameX, blueBoxY, directorBoxW, 90, 0x003366, 0.9)
             .setStrokeStyle(3, 0x66ccff).setDepth(10);
         
-        const directorName = this.add.text(frameX, blueBoxY - 35, (run.directorName || 'UNKNOWN').toUpperCase(), {
-            fontSize: '28px', fontFamily: '"VT323", monospace', color: '#ffcc00', align: 'center'
+        const directorNameText = this.add.text(frameX, blueBoxY - 26, (run.directorName || 'UNKNOWN').toUpperCase(), {
+            fontSize: '26px', fontFamily: '"VT323", monospace', color: '#ffcc00', align: 'center'
         }).setOrigin(0.5).setDepth(11);
 
-        const ratio = run.lastRating || 0;
-        const dialogue = this._getDialogue(ratio, run.directorName);
-        const traitLine = run.traitLines?.[0] || '';
+        const ratioValue = run.lastRating || 0;
+        const currentDialogue = this._getDialogue(ratioValue, run.directorName);
+        const currentTraitLine = run.traitLines?.[0] || '';
         
-        const infoText = this.add.text(frameX, blueBoxY + 10, `"${dialogue}"\n${traitLine}`, {
-            fontSize: '20px', fontFamily: '"VT323", monospace', color: '#ffffff', align: 'center',
+        const infoText = this.add.text(frameX, blueBoxY + 12, `"${currentDialogue}"`, {
+            fontSize: '19px', fontFamily: '"VT323", monospace', color: '#ffffff', align: 'center',
             wordWrap: { width: directorBoxW - 40 }
+        }).setOrigin(0.5).setDepth(11);
+
+        // ── Board area: Level Wrap Tally ──────────────────────────────────────────
+        const tallyY = blueBoxY + 80;
+        const tallyW = directorBoxW;
+        const tallyG = this.add.graphics();
+        tallyG.fillStyle(0x0a0a0a, 0.8);
+        tallyG.fillRect(frameX - tallyW / 2, tallyY - 30, tallyW, 60);
+        tallyG.lineStyle(1, 0x333333, 1);
+        tallyG.strokeRect(frameX - tallyW / 2, tallyY - 30, tallyW, 60);
+        tallyG.setDepth(10);
+
+        const tallyText = `REELS: ${run.reelDrops} / ${run.lastExpectedReels}   •   ACTORS: ${run.lastCastCount || 0}   •   RATING: ${ratioValue.toFixed(1)}`;
+        this.add.text(frameX, tallyY, tallyText, {
+            fontSize: '22px', fontFamily: '"VT323", monospace', color: '#aaaaaa', align: 'center'
         }).setOrigin(0.5).setDepth(11);
 
         // ── Sidebar: Run Recap ────────────────────────────────────────────────────
@@ -453,6 +470,10 @@ export default class ShopScene extends Phaser.Scene {
         if (GameState.currentRun.score >= upgrade.cost) {
             GameState.currentRun.score -= upgrade.cost;
             Object.assign(GameState.currentRun.modifiers, upgrade.mod);
+
+            if (this.budgetLabel) {
+                this.budgetLabel.setText(`BUDGET AVAILABLE: ${GameState.formatMillions(GameState.currentRun.score)}`);
+            }
 
             const label = container.costBtn?.list?.[1];
             if (label) label.setText('PURCHASED');

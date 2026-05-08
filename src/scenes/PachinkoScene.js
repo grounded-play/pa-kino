@@ -1601,6 +1601,7 @@ export default class PachinkoScene extends Phaser.Scene {
         GameState.currentRun.lastRoundScore = netRoundScore;
         GameState.currentRun.lastTargetScore = this.levelData.targetScore;
         GameState.currentRun.lastRating = Math.max(0, Math.round((netRoundScore / this.levelData.targetScore) * 10) / 10);
+        GameState.currentRun.lastCastCount = this.activeCast.length;
 
         // IMDb Ranking Connection
         const isDeepCut = GameState.currentRun.currentFilmIndex === 4;
