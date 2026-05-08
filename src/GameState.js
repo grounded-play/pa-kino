@@ -187,37 +187,37 @@ export const GameState = {
     calculateRating(run = this.currentRun) {
         const actual = run.lastReelsDropped || 0;
         const expected = run.lastExpectedReels || 1;
-        const net = run.lastNetRoundScore || 0;
-        const target = run.lastTargetScore || 1;
+        const gross = run.lastGrossRoundScore || 0;
+        const costs = run.lastProductionCost || 1;
         const actors = run.lastCastCount || 0;
-        
-        let score = 0;
-        // All or Nothing: Hit Target
-        if (net >= 0) score += 2; 
-
-        // All or Nothing: Reel Plan (penalty if over)
-        if (actual <= expected) {
-            score += 3; 
-            score += Math.max(0, expected - actual); // Efficiency bonus still applies
-        } else {
-            score -= (actual - expected); // -1 per reel over
-        }
-
-        // All or Nothing: Ensemble (Must get all 3)
-        if (actors >= 3) {
-            score += 3;
-        }
-        
-        // Oscar Bonus
         const oscars = run.lastOscarCount || 0;
-        if (oscars > 0) {
-            score += 2;
+        
+        // 1. Reel Efficiency (5.0 points max)
+        // Full 5 points if on or under plan. -1 point per reel over.
+        let reelScore = 5.0;
+        if (actual > expected) {
+            reelScore -= (actual - expected);
         }
+        reelScore = Math.max(0, reelScore);
+
+        // 2. Profit Score (2.0 points max)
+        // 1.0 point for breaking even (100%), 
+        // +0.1 per 10% above 100%, up to 2.0 at 200%.
+        let profitScore = 0;
+        if (gross >= costs) {
+            const ratio = gross / costs;
+            profitScore = 1.0 + Math.min(1.0, ratio - 1.0);
+        }
+
+        // 3. Ensemble Cast (2.0 points max)
+        // 0.66 per actor caught (up to 2.0 for all 3)
+        const ensembleScore = (Math.min(3, actors) / 3) * 2.0;
+
+        // 4. Oscar Bonus (1.0 point max)
+        const oscarScore = oscars > 0 ? 1.0 : 0;
         
-        if (net >= target * 1.5) score += 1;
-        if (net >= target * 2.0) score += 1;
-        
-        return Math.max(0, Math.min(10, score));
+        const total = reelScore + profitScore + ensembleScore + oscarScore;
+        return Math.max(0, Math.min(10, total));
     },
 
     getBestProduction() {
@@ -225,11 +225,9 @@ export const GameState = {
     },
 
     formatMillions(value) {
-        const safeValue = Number(value) || 0;
-        if (Math.abs(safeValue) >= 100) {
-            return `$${Math.round(safeValue)}M`;
-        }
-        return `$${safeValue.toFixed(1)}M`;
+        const safeValue = (Number(value) || 0) / 100;
+        // At most 1 decimal place as requested
+        return `$${safeValue.toFixed(1)} Mil`;
     },
 
     unlockFilm(film, directorName = this.currentRun.directorName) {

@@ -288,30 +288,49 @@ export default class ShopScene extends Phaser.Scene {
     _getBreakdown(run) {
         const actual = run.lastReelsDropped || 0;
         const expected = run.lastExpectedReels || 1;
-        const net = run.lastNetRoundScore || 0;
-        const target = run.lastTargetScore || 1;
+        const gross = run.lastGrossRoundScore || 0;
+        const costs = run.lastProductionCost || 1;
         const actors = run.lastCastCount || 0;
+        const oscars = run.lastOscarCount || 0;
 
         const items = [];
-        items.push({ label: 'TARGET REACHED', value: net >= 0 ? '2/2' : '0/2', pts: net >= 0 ? 2 : 0 });
-        items.push({ label: 'ON REEL PLAN', value: actual <= expected ? '3/3' : '0/3', pts: actual <= expected ? 3 : 0 });
         
-        if (actual < expected) {
-            items.push({ label: 'EFFICIENCY BONUS', value: `+${expected - actual}`, pts: expected - actual });
-        } else if (actual > expected) {
-            items.push({ label: 'OVER-REEL PENALTY', value: `-${actual - expected}`, pts: -(actual - expected) });
-        }
+        // 1. Reel Efficiency (5.0 pts)
+        let reelPts = 5.0;
+        if (actual > expected) reelPts -= (actual - expected);
+        reelPts = Math.max(0, reelPts);
+        items.push({ 
+            label: 'REEL EFFICIENCY', 
+            value: `${reelPts.toFixed(1)}/5.0`, 
+            pts: reelPts > 0 ? 1 : 0 
+        });
 
-        // Must have all 3 for points
+        // 2. Profit Score (2.0 pts)
+        let profitPts = 0;
+        if (gross >= costs) {
+            profitPts = 1.0 + Math.min(1.0, (gross / costs) - 1.0);
+        }
+        items.push({ 
+            label: 'PROFIT SCORE', 
+            value: `${profitPts.toFixed(1)}/2.0`, 
+            pts: profitPts > 0 ? 1 : 0 
+        });
+
+        // 3. Ensemble Cast (2.0 pts)
+        const ensemblePts = (Math.min(3, actors) / 3) * 2.0;
         items.push({ 
             label: 'ENSEMBLE CAST', 
-            value: actors >= 3 ? '3/3' : `${actors}/3`, 
-            pts: actors >= 3 ? 3 : 0 
+            value: `${ensemblePts.toFixed(1)}/2.0`, 
+            pts: ensemblePts > 0 ? 1 : 0 
         });
-        
-        if (net >= target * 1.5) {
-            items.push({ label: 'PROFIT BONUS', value: net >= target * 2.0 ? '+2' : '+1', pts: net >= target * 2.0 ? 2 : 1 });
-        }
+
+        // 4. Oscar Bonus (1.0 pts)
+        const oscarPts = oscars > 0 ? 1.0 : 0;
+        items.push({ 
+            label: 'OSCAR BONUS', 
+            value: `${oscarPts.toFixed(1)}/1.0`, 
+            pts: oscarPts > 0 ? 1 : 0 
+        });
         
         return items;
     }
