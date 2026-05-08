@@ -66,6 +66,7 @@ export const GameState = {
         lastTargetScore: 0,
         lastRating: 0,
         lastCastCount: 0,
+        lastOscarCount: 0,
         ballStats: { reel: 0, vhs: 0, dvd: 0 },
         inventory: {
             bouncePads: 3
@@ -103,6 +104,7 @@ export const GameState = {
             lastTargetScore: 0,
             lastRating: 0,
             lastCastCount: 0,
+            lastOscarCount: 0,
             ballStats: { reel: 0, vhs: 0, dvd: 0 },
             inventory: {
                 bouncePads: 3
@@ -140,6 +142,7 @@ export const GameState = {
             lastTargetScore: 0,
             lastRating: 0,
             lastCastCount: 0,
+            lastOscarCount: 0,
             ballStats: { reel: 0, vhs: 0, dvd: 0 },
             inventory: {
                 bouncePads: 3 + (modifiers.startingBouncePads || 0),
@@ -203,6 +206,12 @@ export const GameState = {
         // All or Nothing: Ensemble (Must get all 3)
         if (actors >= 3) {
             score += 3;
+        }
+        
+        // Oscar Bonus
+        const oscars = run.lastOscarCount || 0;
+        if (oscars > 0) {
+            score += 2;
         }
         
         if (net >= target * 1.5) score += 1;

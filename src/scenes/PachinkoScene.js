@@ -32,6 +32,8 @@ export default class PachinkoScene extends Phaser.Scene {
         this.ballEaters = [];
         this.pendingRoundWin = false;
         this.backgroundPlatformMirrors = new Map();
+        this.oscars = [];
+        this.oscarsCollected = 0;
         this.levelReelsDropped = 0;
         this.nextBallId = 1;
         this.readyToWrap = false;
@@ -208,7 +210,15 @@ export default class PachinkoScene extends Phaser.Scene {
         this.setupUI();
         this.setupCollisions();
         this.setupInput();
-        this.createOscar();
+        // Oscars: spawn more in early levels, fewer in later levels
+        const levelIndex = GameState.currentRun.currentFilmIndex;
+        let oscarCount = 1;
+        if (levelIndex === 0) oscarCount = 3;
+        else if (levelIndex === 1) oscarCount = 2;
+        
+        for (let i = 0; i < oscarCount; i++) {
+            this.createOscar();
+        }
 
         // Apply Global Trait Modifiers
         if (this.directorModifiers.gravityMult) {
@@ -353,6 +363,7 @@ export default class PachinkoScene extends Phaser.Scene {
                 const hasNoMultiplier = this.directorModifiers.noMultiplier;
 
                 const centerDist = Math.abs(x - (this.boardWidth / 2));
+                let isExplosive = false;
                 if (centerDist < 50) {
                     size = 18;
                     multiplier = 5;
@@ -361,6 +372,14 @@ export default class PachinkoScene extends Phaser.Scene {
                     size = 14;
                     multiplier = 2;
                     baseColor = lowerPegColor;
+                } else {
+                    const levelIndex = GameState.currentRun.currentFilmIndex;
+                    const explosiveChance = Math.max(0.02, 0.10 - (levelIndex * 0.02));
+                    if (Math.random() < explosiveChance) {
+                        // Chance for an explosive peg scales down as campaign progresses
+                        isExplosive = true;
+                        baseColor = 0xff3300; // Bright explosive red
+                    }
                 }
 
                 const isRotatingBouncer = (row + col) % 7 === 0;
@@ -385,6 +404,7 @@ export default class PachinkoScene extends Phaser.Scene {
                     });
                 pegBody.visual = pegVisual;
                 pegBody.multiplier = multiplier;
+                pegBody.isExplosive = isExplosive;
                 pegBody.isRotatingBouncer = isRotatingBouncer;
                 pegBody.rotationSpeed = Phaser.Math.FloatBetween(0.01, 0.018) * (Math.random() > 0.5 ? 1 : -1);
 
@@ -393,7 +413,17 @@ export default class PachinkoScene extends Phaser.Scene {
                 }
 
                 let multiplierLabel = null;
-                if (multiplier > 1 && !hasNoMultiplier) {
+                if (isExplosive) {
+                    multiplierLabel = this.add.text(x, y, 'BOOM', {
+                        fontSize: '12px',
+                        fontFamily: '"VT323", monospace',
+                        color: '#ffffff',
+                        stroke: '#000000',
+                        strokeThickness: 3
+                    }).setOrigin(0.5).setDepth(6);
+                    this.boardContainer.add(multiplierLabel);
+                    this.multiplierLabels.push(multiplierLabel);
+                } else if (multiplier > 1 && !hasNoMultiplier) {
                     multiplierLabel = this.add.text(x, y, `x${multiplier}`, {
                         fontSize: size >= 20 ? '18px' : '14px',
                         fontFamily: '"VT323", monospace',
@@ -918,7 +948,7 @@ export default class PachinkoScene extends Phaser.Scene {
 
         const safeBallsRemaining = Number.isFinite(this.ballsRemaining) ? this.ballsRemaining : 0;
         const safeTarget = Math.max(1, this.levelData?.targetScore || 1);
-        const reelsDropped = GameState.currentRun.reelDrops || 0;
+        const reelsDropped = this.levelReelsDropped || 0;
         const liveTakePotential = this.getLiveTakePotential();
 
         this.clampCurrentScore(this.currentScore);
@@ -1155,15 +1185,44 @@ export default class PachinkoScene extends Phaser.Scene {
         const funnelTip = this.getFunnelTipPosition();
         const spawnX = Phaser.Math.Clamp(funnelTip.x, 80, this.boardWidth - 80);
         const spawnY = funnelTip.y;
+        
+        // Dampen inherited velocity from the funnel
+        const inheritedX = Phaser.Math.Clamp(this.funnelVelocityX * 0.15, -12, 12);
+        const inheritedY = Phaser.Math.Clamp(this.funnelVelocityY * 0.15, 0, 10);
+        
         const isOscarBall = Math.random() < 0.1;
+        const ball = this.spawnBall(spawnX, spawnY, {
+            x: inheritedX,
+            y: inheritedY + 2
+        }, isOscarBall);
+
+        this.ballsRemaining -= 1;
+        this.levelReelsDropped += 1;
+        GameState.currentRun.reelDrops += 1;
+        this.updateUI();
+
+        if (isOscarBall && !this.sound.mute && this.cache.audio.exists('sfx_oscar')) {
+            this.sound.play('sfx_oscar', { volume: 0.6 * (GameState.getAudioSettings(this).sfxVolume ?? 1) });
+        }
+
+        // High Speed Trait
+        if (this.directorModifiers.ballSpeedMult) {
+            this.matter.body.setVelocity(ball, { 
+                x: ball.velocity.x * this.directorModifiers.ballSpeedMult, 
+                y: ball.velocity.y * this.directorModifiers.ballSpeedMult 
+            });
+        }
+    }
+
+    spawnBall(x, y, velocity = { x: 0, y: 0 }, isOscarBall = false) {
         const visualKey = isOscarBall ? 'filmreel' : Phaser.Utils.Array.GetRandom(['filmreel', 'vhs', 'dvd']);
-        const visual = this.add.image(spawnX, spawnY, visualKey).setDisplaySize(44, 44).setDepth(15);
+        const visual = this.add.image(x, y, visualKey).setDisplaySize(44, 44).setDepth(15);
         if (visualKey === 'filmreel') {
             visual.setTint(isOscarBall ? 0xf5c518 : 0xffffff);
         }
         this.boardContainer.add(visual);
 
-        const ball = this.matter.add.circle(spawnX, spawnY, 20, {
+        const ball = this.matter.add.circle(x, y, 20, {
             restitution: 0.82,
             friction: 0.002,
             frictionAir: 0.003,
@@ -1179,33 +1238,12 @@ export default class PachinkoScene extends Phaser.Scene {
         ball.ballId = this.nextBallId++;
         ball.expireAt = this.time.now + this.getReelLifetimeMs();
 
-        // Dampen inherited velocity from the funnel so it feels responsive but controlled
-        const inheritedX = Phaser.Math.Clamp(this.funnelVelocityX * 0.15, -12, 12);
-        const inheritedY = Phaser.Math.Clamp(this.funnelVelocityY * 0.15, 0, 10);
-
-        this.matter.body.setVelocity(ball, {
-            x: inheritedX,
-            y: inheritedY + 2 // Slight downward push to ensure it leaves the funnel cleanly
-        });
+        this.matter.body.setVelocity(ball, velocity);
 
         this.activeBalls.push(ball);
-        this.ballsRemaining -= 1;
-        this.levelReelsDropped += 1;
         GameState.currentRun.ballStats[ball.ballType] = (GameState.currentRun.ballStats[ball.ballType] || 0) + 1;
-        GameState.currentRun.reelDrops += 1;
-        this.updateUI();
-
-        if (isOscarBall && !this.sound.mute && this.cache.audio.exists('sfx_oscar')) {
-            this.sound.play('sfx_oscar', { volume: 0.6 * (GameState.getAudioSettings(this).sfxVolume ?? 1) });
-        }
-
-        // High Speed Trait
-        if (this.directorModifiers.ballSpeedMult) {
-            this.matter.body.setVelocity(ball, { 
-                x: ball.velocity.x * this.directorModifiers.ballSpeedMult, 
-                y: ball.velocity.y * this.directorModifiers.ballSpeedMult 
-            });
-        }
+        
+        return ball;
     }
 
     placePad(x, y) {
@@ -1255,7 +1293,7 @@ export default class PachinkoScene extends Phaser.Scene {
                 } else if (other.label.startsWith('bucket_')) {
                     this.checkBallBucketCollision(ball, other);
                 } else if (other.label === 'oscar') {
-                    this.checkOscarCollision(ball);
+                    this.checkOscarCollision(ball, other);
                 } else if (other.label?.startsWith('actor_')) {
                     this.handleActorCollection(ball, other);
                 } else if (other.label === 'ball_eater') {
@@ -1286,6 +1324,15 @@ export default class PachinkoScene extends Phaser.Scene {
         const PEG_COOLDOWN_MS = 100;
         if ((now - (ball.lastPegHitTime || 0)) < PEG_COOLDOWN_MS) return;
         ball.lastPegHitTime = now;
+
+        if (peg.isExplosive) {
+            this.levelReelsDropped = 0;
+            this.triggerAntiStuck(ball); // Reusing anti-stuck explosion logic
+            this.addBark('REELS RESET!', peg.visual);
+            this.destroyPeg(peg);
+            this.updateUI();
+            return;
+        }
 
         peg.bounceCount = (peg.bounceCount || 0) + 1;
 
@@ -1381,21 +1428,38 @@ export default class PachinkoScene extends Phaser.Scene {
         });
         this.boardContainer.add(stars);
 
-        this.oscar = { visual, body, stars, startTime: this.time.now, startY: y };
+        this.oscars.push({ visual, body, stars, startTime: this.time.now, startY: y });
     }
 
-    checkOscarCollision(ball) {
-        if (!this.oscar || !ball) {
+    checkOscarCollision(ball, oscarBody) {
+        const oscarIndex = this.oscars.findIndex(o => o.body === oscarBody);
+        if (oscarIndex === -1 || !ball) {
             return;
         }
+        
+        const oscar = this.oscars[oscarIndex];
+        this.oscarsCollected = (this.oscarsCollected || 0) + 1;
 
         const pickupMult = this.directorModifiers.oscarBonusMult || 1;
         ball.scoreMultiplier = Math.min((ball.scoreMultiplier || 1) * (2 * pickupMult), 16);
         
+        // Multi-ball! Spawn 2 extra reels
+        const spawnX = oscar.visual.x;
+        const spawnY = oscar.visual.y;
+        
+        for (let i = 0; i < 2; i++) {
+            const angle = Phaser.Math.FloatBetween(-Math.PI * 0.8, -Math.PI * 0.2); // Upwards spread
+            const speed = Phaser.Math.FloatBetween(4, 7);
+            this.spawnBall(spawnX, spawnY, {
+                x: Math.cos(angle) * speed,
+                y: Math.sin(angle) * speed
+            }, ball.isOscarBall);
+        }
+
         // Trigger scanline reactive jitter for Oscar!
         this.game.events.emit('game-impact', 2.5);
 
-        const bonusTxt = this.add.text(this.oscar.visual.x, this.oscar.visual.y, 'OSCAR BOOST!', {
+        const bonusTxt = this.add.text(oscar.visual.x, oscar.visual.y, 'OSCAR MULTIBALL!', {
             fontSize: '36px',
             fontFamily: '"VT323", monospace',
             color: '#f5c518',
@@ -1406,23 +1470,23 @@ export default class PachinkoScene extends Phaser.Scene {
 
         this.tweens.add({
             targets: bonusTxt,
-            y: bonusTxt.y - 100,
+            y: bonusTxt.y - 120,
             alpha: 0,
             duration: 1500,
             onComplete: () => bonusTxt.destroy()
         });
 
-        this.cameras.main.flash(500, 255, 200, 0, 0.2);
+        this.cameras.main.flash(500, 255, 215, 0, 0.25);
 
         if (!this.sound.mute && this.cache.audio.exists('sfx_oscar')) {
             this.sound.play('sfx_oscar', { volume: 1.2 * (GameState.getAudioSettings(this).sfxVolume ?? 1) });
         }
 
-        this.addBark('Oscar boost ready!');
-        this.oscar.visual.destroy();
-        this.oscar.stars.destroy();
-        this.matter.world.remove(this.oscar.body);
-        this.oscar = null;
+        this.addBark('Oscar Multiball!');
+        oscar.visual.destroy();
+        oscar.stars.destroy();
+        this.matter.world.remove(oscar.body);
+        this.oscars.splice(oscarIndex, 1);
         this.updateUI();
     }
 
@@ -1468,7 +1532,9 @@ export default class PachinkoScene extends Phaser.Scene {
             
             const body = this.matter.add.circle(centerX + this.margin, centerY + this.margin, 34, {
                 isStatic: true,
-                isSensor: true,
+                isSensor: false,
+                restitution: 0.8,
+                friction: 0.05,
                 label: `actor_${i}`
             });
             
@@ -1486,21 +1552,46 @@ export default class PachinkoScene extends Phaser.Scene {
         }
     }
 
-    handleActorCollection(ball, sensor) {
-        const indexStr = sensor.label.split('_')[1];
+    handleActorCollection(ball, body) {
+        const indexStr = body.label.split('_')[1];
         const index = parseInt(indexStr);
         const item = this.actorItems.find(it => it.index === index);
         
         if (!item || this.activeCast.includes(index)) return;
         
+        // Mark as collected immediately to prevent re-triggering logic
         this.hireActor(index);
         
-        // Remove from board
-        item.visual.destroy();
-        this.matter.world.remove(item.body);
+        // Defer making it a sensor to the next frame. 
+        // This ensures the Matter.js solver processes the reflection in the current step.
+        this.time.delayedCall(0, () => {
+            if (body && body.gameObject) { // Check if still valid
+                body.isSensor = true;
+            } else if (body) {
+                body.isSensor = true;
+            }
+        });
+        
+        // Visual "pop" effect
+        if (item.visual) {
+            this.tweens.add({
+                targets: item.visual,
+                scale: 1.6,
+                alpha: 0,
+                duration: 400,
+                ease: 'Back.easeIn',
+                onComplete: () => {
+                    if (item.visual) item.visual.destroy();
+                    if (item.body) this.matter.world.remove(item.body);
+                }
+            });
+        }
+        
+        // Remove from tracking list immediately so update loop doesn't move it
         this.actorItems = this.actorItems.filter(it => it.index !== index);
         
-        this.cameras.main.flash(200, 255, 200, 0, 0.1);
+        this.cameras.main.flash(200, 200, 255, 200, 0.15);
+        this.game.events.emit('game-impact', 1.2);
     }
 
     handlePirateCollision(ball) {
@@ -1607,11 +1698,23 @@ export default class PachinkoScene extends Phaser.Scene {
                 return true;
             }
 
+            this.destroyPeg(entry.body);
+            return false;
+        });
+    }
+
+    destroyPeg(pegBody) {
+        const entry = this.pegEntries.find(e => e.body === pegBody);
+        if (entry) {
             entry.visual?.destroy();
             entry.label?.destroy();
             this.matter.world.remove(entry.body);
-            return false;
-        });
+            this.pegEntries = this.pegEntries.filter(e => e.body !== pegBody);
+        } else {
+            // Fallback if not in entries
+            pegBody.visual?.destroy();
+            this.matter.world.remove(pegBody);
+        }
     }
 
     checkRoundEnd() {
@@ -1645,6 +1748,7 @@ export default class PachinkoScene extends Phaser.Scene {
         GameState.currentRun.lastExpectedReels = this.levelData.expectedReels || 1;
         GameState.currentRun.lastReelsDropped = this.levelReelsDropped;
         GameState.currentRun.lastReelsOver = Math.max(0, this.levelReelsDropped - (this.levelData.expectedReels || 1));
+        GameState.currentRun.lastOscarCount = this.oscarsCollected || 0;
         GameState.currentRun.lastRoundScore = netRoundScore;
         GameState.currentRun.lastTargetScore = this.levelData.targetScore;
         GameState.currentRun.lastRating = GameState.calculateRating();
@@ -1746,10 +1850,13 @@ export default class PachinkoScene extends Phaser.Scene {
             });
         }
 
-        if (this.oscar?.visual) {
-            const t = (time - this.oscar.startTime) / 1000;
-            this.oscar.visual.y = this.oscar.startY + Math.sin(t * 2) * 50;
-            this.matter.body.setPosition(this.oscar.body, { x: this.oscar.visual.x, y: this.oscar.visual.y });
+        if (this.oscars) {
+            this.oscars.forEach(oscar => {
+                if (!oscar?.visual) return;
+                const t = (time - oscar.startTime) / 1000;
+                oscar.visual.y = oscar.startY + Math.sin(t * 2) * 50;
+                this.matter.body.setPosition(oscar.body, { x: oscar.visual.x, y: oscar.visual.y });
+            });
         }
 
         this.rotatingBouncers.forEach((peg) => {
