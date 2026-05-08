@@ -17,12 +17,24 @@ export default class CabinetScene extends Phaser.Scene {
 
         // High depth to ensure it's always on top
         this.overlayContainer = this.add.container(0, 0).setDepth(10000).setScrollFactor(0);
+        
+        // Black cover for transitions
+        this.blackCover = this.add.rectangle(width / 2, height / 2, width, height, 0x000000)
+            .setVisible(false)
+            .setDepth(9000); // Just below scanlines/bezel but above game
+        this.overlayContainer.add(this.blackCover);
 
         this.ensureScanlineTexture();
         this.drawBezel(width, height);
         this.addScanlines(width, height);
         this.addVignette(width, height);
         this.addBranding(width, height);
+    }
+
+    setBlackCover(visible) {
+        if (this.blackCover) {
+            this.blackCover.setVisible(visible);
+        }
     }
 
     ensureScanlineTexture() {

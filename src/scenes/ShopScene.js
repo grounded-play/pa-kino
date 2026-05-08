@@ -67,6 +67,7 @@ export default class ShopScene extends Phaser.Scene {
     }
 
     create() {
+        UI.createWheelTransition(this, 'in');
         const { width, height } = this.scale;
         const margin = 60;
         const safeWidth = width - (margin * 2);
@@ -241,7 +242,9 @@ export default class ShopScene extends Phaser.Scene {
 
         // Next Filming Button (Moved up slightly from very bottom)
         const nextBtn = UI.createChunkyButton(this, frameX, height - 140, 420, 80, 'NEXT FILMING >', () => {
-            this.scene.start('PachinkoScene');
+            UI.createWheelTransition(this, 'out', () => {
+                this.scene.start('PachinkoScene');
+            });
         }).setDepth(10);
 
         // ── Sidebar: Run Recap ────────────────────────────────────────────────────
@@ -259,7 +262,9 @@ export default class ShopScene extends Phaser.Scene {
                 if (!this.sound.mute && this.cache.audio.exists('sfx_abandon')) {
                     this.sound.play('sfx_abandon', { volume: 0.9 * (GameState.getAudioSettings(this).sfxVolume ?? 1) });
                 }
-                this.scene.start('DirectorCutScene', GameState.createRunRecap({ abandoned: true }));
+                UI.createWheelTransition(this, 'out', () => {
+                    this.scene.start('DirectorCutScene', GameState.createRunRecap({ abandoned: true }));
+                });
             }
         });
 

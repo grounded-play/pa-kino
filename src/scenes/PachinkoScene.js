@@ -152,7 +152,8 @@ export default class PachinkoScene extends Phaser.Scene {
         this.load.svg('dvd', '/assets/images/dvd.svg', { width: 30, height: 30 });
     }
 
-    create() {
+    create(data) {
+        UI.createWheelTransition(this, 'in');
         const { width, height } = this.scale;
         this.bgScene = this.scene.get('BackgroundScene');
         this.bgScene?.setClickRipplesEnabled(false);
@@ -1636,9 +1637,10 @@ export default class PachinkoScene extends Phaser.Scene {
         if (!this.sound.mute && this.cache.audio.exists('sfx_abandon')) {
             this.sound.play('sfx_abandon', { volume: 0.9 * (GameState.getAudioSettings(this).sfxVolume ?? 1) });
         }
-        this.scene.start('DirectorCutScene', GameState.createRunRecap({ abandoned: true }));
+        UI.createWheelTransition(this, 'out', () => {
+            this.scene.start('DirectorCutScene', GameState.createRunRecap({ abandoned: true }));
+        });
     }
-
     addBark(textStr, anchor = null) {
         const target = anchor || this.directorAvatar;
         if (!target) {
@@ -1747,7 +1749,9 @@ export default class PachinkoScene extends Phaser.Scene {
 
         if (this.ballsRemaining <= 0 && this.activeBalls.length === 0) {
             this.isLevelActive = false;
-            this.time.delayedCall(1500, () => this.scene.start('DirectorCutScene', GameState.createRunRecap({ win: false })));
+            UI.createWheelTransition(this, 'out', () => {
+                this.scene.start('DirectorCutScene', GameState.createRunRecap({ win: false }));
+            });
         }
     }
 
@@ -1776,17 +1780,12 @@ export default class PachinkoScene extends Phaser.Scene {
         if (isDeepCut && projectedRating >= 9.0) {
             this.triggerMasterpieceAnimation();
         } else {
-            this.time.delayedCall(1500, () => {
-                const isFinalFilm = GameState.advanceFilm();
-                if (isFinalFilm) {
-                    this.scene.start('DirectorCutScene', GameState.createRunRecap({ win: true }));
-                } else {
-                    this.scene.start('ShopScene');
-                }
+            UI.createWheelTransition(this, 'out', () => {
+                GameState.advanceFilm();
+                this.scene.start('DirectorCutScene', GameState.createRunRecap({ win: true }));
             });
         }
     }
-
     triggerMasterpieceAnimation() {
         const { width, height } = this.scale;
         

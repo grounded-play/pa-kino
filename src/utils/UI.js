@@ -607,5 +607,69 @@ export const UI = {
             return snippet.substring(0, lastPeriod + 1);
         }
         return snippet + "...";
+    },
+
+    /**
+     * Creates a "Director's Wheel" radial iris transition.
+     * @param {Phaser.Scene} scene 
+     * @param {string} type - 'in' (opening) or 'out' (closing)
+     * @param {Function} onComplete 
+     */
+    createWheelTransition(scene, type, onComplete) {
+        const { width, height } = scene.scale;
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const maxRadius = Math.sqrt(centerX * centerX + centerY * centerY);
+        const cabinet = scene.scene.get('CabinetScene');
+
+        // If type is 'in', we start with a black screen and reveal
+        // If type is 'out', we start clear and cover with black
+        let radius = { value: type === 'in' ? 0 : maxRadius };
+        let targetRadius = type === 'in' ? maxRadius : 0;
+        
+        const transitionContainer = scene.add.container(0, 0).setDepth(10000).setScrollFactor(0);
+        const blackBg = scene.add.rectangle(centerX, centerY, width, height, 0x000000);
+        transitionContainer.add(blackBg);
+
+        const irisMaskGraphics = scene.make.graphics({ x: 0, y: 0, add: false });
+        const irisMask = irisMaskGraphics.createGeometryMask();
+        blackBg.setMask(irisMask);
+        irisMask.invertAlpha = true; // This makes the CIRCLE transparent!
+
+        const updateIris = () => {
+            irisMaskGraphics.clear();
+            irisMaskGraphics.fillStyle(0xffffff, 1);
+            irisMaskGraphics.fillCircle(centerX, centerY, radius.value);
+        };
+
+        // If we are fading IN, we should turn off the global black cover as soon as our local one is ready
+        if (type === 'in' && cabinet) {
+            updateIris();
+            cabinet.setBlackCover(false);
+        }
+
+        scene.tweens.add({
+            targets: radius,
+            value: targetRadius,
+            duration: 800,
+            ease: 'Cubic.easeInOut',
+            onUpdate: updateIris,
+            onComplete: () => {
+                if (type === 'in') {
+                    transitionContainer.destroy();
+                    irisMaskGraphics.destroy();
+                } else if (type === 'out' && cabinet) {
+                    // Turn on global cover to hold the black screen between scenes
+                    cabinet.setBlackCover(true);
+                }
+                
+                if (onComplete) onComplete();
+            }
+        });
+
+        // Initial draw
+        updateIris();
+        
+        return transitionContainer;
     }
 };

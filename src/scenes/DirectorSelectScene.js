@@ -630,7 +630,9 @@ export default class DirectorSelectScene extends Phaser.Scene {
     beginRun() {
         if (!this.pendingSelection) return;
         GameState.initRun(this.pendingSelection, this.pendingSelection.films);
-        this.scene.start('PachinkoScene', { director: this.pendingSelection });
+        UI.createWheelTransition(this, 'out', () => {
+            this.scene.start('PachinkoScene', { director: this.pendingSelection });
+        });
     }
 
     createAudioToggle(width, height) {
