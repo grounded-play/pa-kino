@@ -167,6 +167,7 @@ export default class BootScene extends Phaser.Scene {
         GameState.ensureAudibleAudio(this);
         GameState.syncAudioRegistry(this);
         this.createPlaceholderPortraitTexture();
+        this.createRockTexture();
         this.tickerTween?.stop();
 
         // Destroy transient loading-screen graphics
@@ -378,6 +379,45 @@ export default class BootScene extends Phaser.Scene {
         graphics.lineStyle(8, 0xbdbdbd, 1);
         graphics.strokeRoundedRect(4, 4, 248, 504, 24);
         graphics.generateTexture('placeholder_box', 256, 512);
+        graphics.destroy();
+    }
+
+    createRockTexture() {
+        if (this.textures.exists('rockKey')) return;
+
+        const size = 64;
+        const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+        
+        // Base rock shape
+        graphics.fillStyle(0x555555, 1);
+        graphics.beginPath();
+        graphics.moveTo(32, 4);
+        graphics.lineTo(58, 20);
+        graphics.lineTo(60, 44);
+        graphics.lineTo(38, 60);
+        graphics.lineTo(10, 50);
+        graphics.lineTo(4, 24);
+        graphics.closePath();
+        graphics.fillPath();
+
+        // Shading/Texture
+        graphics.fillStyle(0x333333, 0.5);
+        graphics.beginPath();
+        graphics.moveTo(32, 4);
+        graphics.lineTo(58, 20);
+        graphics.lineTo(32, 32);
+        graphics.closePath();
+        graphics.fillPath();
+
+        graphics.fillStyle(0x777777, 0.3);
+        graphics.beginPath();
+        graphics.moveTo(4, 24);
+        graphics.lineTo(32, 32);
+        graphics.lineTo(10, 50);
+        graphics.closePath();
+        graphics.fillPath();
+
+        graphics.generateTexture('rockKey', size, size);
         graphics.destroy();
     }
 

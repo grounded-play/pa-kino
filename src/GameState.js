@@ -1,3 +1,5 @@
+export const MAX_RUN_BUDGET = 10000; // $10,000M hard cap
+
 export const GameState = {
     defaultAudioStats: {
         audioMuted: false,
@@ -50,6 +52,7 @@ export const GameState = {
         reelDrops: 0,
         completedFilms: [],
         lastRoundScore: 0,
+        lastTargetScore: 0,
         lastRating: 0,
         ballStats: { reel: 0, vhs: 0, dvd: 0 },
         inventory: {
@@ -78,6 +81,7 @@ export const GameState = {
             reelDrops: 0,
             completedFilms: [],
             lastRoundScore: 0,
+            lastTargetScore: 0,
             lastRating: 0,
             ballStats: { reel: 0, vhs: 0, dvd: 0 },
             inventory: {
@@ -106,6 +110,7 @@ export const GameState = {
             reelDrops: 0,
             completedFilms: [],
             lastRoundScore: 0,
+            lastTargetScore: 0,
             lastRating: 0,
             ballStats: { reel: 0, vhs: 0, dvd: 0 },
             inventory: {
@@ -226,6 +231,7 @@ export const GameState = {
         const completedFilm = this.getCurrentFilm();
         this.markFilmComplete(completedFilm, this.currentRun.score);
         this.currentRun.currentFilmIndex += 1;
+        this.currentRun.score = Math.min(this.currentRun.score, MAX_RUN_BUDGET);
         this.saveData();
         return this.currentRun.currentFilmIndex >= this.currentRun.filmography.length;
     },
@@ -321,12 +327,13 @@ export const GameState = {
     ensureAudibleAudio(scene = null) {
         this.normalizeAudioSettings();
 
-        const effectivelySilent = this.persistentStats.audioMuted ||
-            this.persistentStats.masterVolume <= 0 ||
-            (this.persistentStats.musicVolume <= 0 && this.persistentStats.sfxVolume <= 0);
+        // Only reset on genuine data corruption (NaN/null/undefined), never on
+        // intentionally low or zero volumes — those are valid user preferences.
+        const corruptedVolumes = !Number.isFinite(this.persistentStats.masterVolume) ||
+            (!Number.isFinite(this.persistentStats.musicVolume) && !Number.isFinite(this.persistentStats.sfxVolume));
 
-        if (effectivelySilent) {
-            console.warn('Audio settings were muted or zeroed out. Restoring audible defaults.');
+        if (corruptedVolumes) {
+            console.warn('Audio settings corrupted. Restoring defaults.');
             this.resetAudioSettings(scene);
         } else {
             this.syncAudioRegistry(scene);

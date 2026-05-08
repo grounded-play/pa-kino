@@ -8,6 +8,12 @@ export default class BackgroundScene extends Phaser.Scene {
 
     create() {
         const { width, height } = this.scale;
+        
+        // Define collision categories
+        this.CAT_BALL = this.matter.world.nextCategory();
+        this.CAT_ROCK = this.matter.world.nextCategory();
+        this.CAT_LOGO = this.matter.world.nextCategory();
+
         this.clickRipplesEnabled = true;
         this.cubeHalfWidth = 128;
         this.cubeHalfHeight = 64;
@@ -92,7 +98,38 @@ export default class BackgroundScene extends Phaser.Scene {
         this.timeTick = 0;
         this.wheelVortex = { x: width / 2, y: height * 0.35, radius: 300, power: 0 };
         this.createPhysicalWheel(width / 2, height * 0.35, 300);
+        this.createRocks();
         this.setBgWheelVisible(false);
+    }
+
+    createRocks() {
+        const { width, height } = this.scale;
+        this.rocks = [];
+        
+        // Add some static rocks to the background
+        const rockPositions = [
+            { x: width * 0.15, y: height * 0.2 },
+            { x: width * 0.85, y: height * 0.25 },
+            { x: width * 0.1, y: height * 0.75 },
+            { x: width * 0.9, y: height * 0.8 },
+            { x: width * 0.5, y: height * 0.9 }
+        ];
+
+        rockPositions.forEach(pos => {
+            const rock = this.matter.add.image(pos.x, pos.y, 'rockKey', null, {
+                isStatic: true,
+                label: 'bg_rock',
+                collisionFilter: {
+                    category: this.CAT_ROCK,
+                    mask: this.CAT_BALL | this.CAT_ROCK // Rocks collide with balls and other rocks (if they move)
+                }
+            });
+            rock.setDepth(15);
+            rock.setAlpha(0.7);
+            rock.setScale(Phaser.Math.FloatBetween(0.8, 1.4));
+            rock.setAngle(Phaser.Math.Between(0, 360));
+            this.rocks.push(rock);
+        });
     }
 
     shouldSpawnClickRipple() {
@@ -257,7 +294,11 @@ export default class BackgroundScene extends Phaser.Scene {
             restitution: 0.92,
             friction: 0,
             frictionStatic: 0,
-            density: 0.05
+            density: 0.05,
+            collisionFilter: {
+                category: this.CAT_BALL,
+                mask: this.CAT_BALL | this.CAT_ROCK // Balls collide with balls and rocks, but not logo
+            }
         });
         
         let vis = this.add.circle(x, y, 8, 0x00ffff);

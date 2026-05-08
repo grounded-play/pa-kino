@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GameState } from '../GameState.js';
+import { GameState, MAX_RUN_BUDGET } from '../GameState.js';
 import { TMDB } from '../utils/TMDB.js';
 import { ColorExtractor } from '../utils/ColorExtractor.js';
 import { UI } from '../utils/UI.js';
@@ -74,7 +74,10 @@ export default class PachinkoScene extends Phaser.Scene {
         this.explosionRadius = 100 * (this.directorModifiers.explosionRadiusMult || 1);
         this.dominantColor = 0x222222;
         this.configureLevelData();
-        this.currentScore = Number(GameState.currentRun.score || 0);
+        // Carry-over budget is preserved in runScoreBase so GameState stays accurate,
+        // but each level's win condition measures only what is earned THIS level.
+        this.runScoreBase = Number(GameState.currentRun.score || 0);
+        this.currentScore = 0;
     }
 
     preload() {
@@ -406,87 +409,93 @@ export default class PachinkoScene extends Phaser.Scene {
 
         this.sidebar = this.add.container(this.margin + this.boardWidth, this.margin).setDepth(100);
 
-        const sideBg = this.add.rectangle(sidebarWidth / 2, this.scale.height / 2, sidebarWidth, this.scale.height, 0x1a1a1a, 1)
-            .setStrokeStyle(6, 0xff9f1c);
+        const sideBg = this.add.rectangle(sidebarWidth / 2, this.boardHeight / 2, sidebarWidth, this.boardHeight, 0x0d0d0d, 1);
         this.sidebar.add(sideBg);
 
-        let currentY = 24;
+        // Sidebar Clipping Mask
+        const maskShape = this.make.graphics();
+        maskShape.fillStyle(0xffffff);
+        maskShape.fillRect(this.margin + this.boardWidth, this.margin, sidebarWidth, this.boardHeight);
+        const sidebarMask = maskShape.createGeometryMask();
+        this.sidebar.setMask(sidebarMask);
+
+        let currentY = 130; // Leave room for settings button at top-right
 
         this.createSidebarAudioControls();
 
-        this.posterFrame = this.add.rectangle(sidebarWidth / 2, currentY + 150, innerWidth, 280, 0x111111, 1)
-            .setStrokeStyle(4, 0xffaa00);
+        this.posterFrame = this.add.rectangle(sidebarWidth / 2, currentY + 120, innerWidth, 240, 0x111111, 1)
+            .setStrokeStyle(3, 0xffaa00);
         this.sidebar.add(this.posterFrame);
 
         if (this.textures.exists(this.currentPosterKey)) {
-            this.posterImage = this.add.image(sidebarWidth / 2, currentY + 150, this.currentPosterKey).setOrigin(0.5);
-            const posterScale = Math.min((innerWidth - 20) / this.posterImage.width, 260 / this.posterImage.height);
-            this.posterImage.setScale(posterScale);
-            this.posterImage.setTint(0xf8e7b9);
+            this.posterImage = this.add.image(sidebarWidth / 2, currentY + 120, this.currentPosterKey).setOrigin(0.5);
+            this.posterImage.setDisplaySize(innerWidth - 16, 220);
             this.posterImage.setAlpha(0.96);
             this.sidebar.add(this.posterImage);
         } else {
-            const posterFallback = this.add.rectangle(sidebarWidth / 2, currentY + 150, innerWidth - 20, 250, 0x6f6f6f, 1)
-                .setStrokeStyle(2, 0xbdbdbd);
-            const posterFallbackText = this.add.text(sidebarWidth / 2, currentY + 150, 'POSTER\nUNAVAILABLE', {
-                fontSize: '30px',
+            const posterFallback = this.add.rectangle(sidebarWidth / 2, currentY + 120, innerWidth - 16, 220, 0x333333, 1)
+                .setStrokeStyle(2, 0x666666);
+            const posterFallbackText = this.add.text(sidebarWidth / 2, currentY + 120, 'POSTER\nUNAVAILABLE', {
+                fontSize: '28px',
                 fontFamily: '"VT323", monospace',
-                color: '#f0f0f0',
+                color: '#888888',
                 align: 'center'
             }).setOrigin(0.5);
             this.sidebar.add([posterFallback, posterFallbackText]);
         }
-        currentY += 312;
+        currentY += 262;
 
         // Director Name
         this.directorNameText = this.add.text(sidebarWidth / 2, currentY, this.directorData.name.toUpperCase(), {
             fontSize: '28px',
             fontFamily: '"VT323", monospace',
             color: '#ffffff',
-            align: 'center'
+            align: 'center',
+            wordWrap: { width: innerWidth }
         }).setOrigin(0.5, 0);
         this.sidebar.add(this.directorNameText);
         currentY += this.directorNameText.height + 10;
 
         // Trait Box
-        const traitBox = this.add.rectangle(sidebarWidth / 2, currentY + 24, innerWidth, 52, 0x333333, 1)
-            .setStrokeStyle(2, 0xffaa00, 0.8);
+        const traitBox = this.add.rectangle(sidebarWidth / 2, currentY + 18, innerWidth, 36, 0x1e1e1e, 1)
+            .setStrokeStyle(1, 0xffaa00, 0.6);
         this.sidebar.add(traitBox);
         const traitTextStr = this.directorData.traitLines?.[0] || 'STANDARD PRODUCTION';
-        this.traitText = this.add.text(sidebarWidth / 2, currentY + 24, traitTextStr, {
-            fontSize: '22px',
+        this.traitText = this.add.text(sidebarWidth / 2, currentY + 18, traitTextStr, {
+            fontSize: '19px',
             fontFamily: '"VT323", monospace',
             color: '#ffaa00',
             align: 'center',
             wordWrap: { width: innerWidth - 16 }
         }).setOrigin(0.5);
         this.sidebar.add(this.traitText);
-        currentY += 62;
+        currentY += 48;
 
         // Budget / Score HUD
-        const statsBox = this.add.rectangle(sidebarWidth / 2 - 28, currentY + 54, innerWidth - 70, 118, 0x121212, 0.96)
-            .setStrokeStyle(3, 0xffaa00, 0.9)
+        const statsBox = this.add.rectangle(sidebarWidth / 2, currentY + 52, innerWidth, 106, 0x0f0f0f, 1)
+            .setStrokeStyle(2, 0xffaa00, 0.55)
             .setOrigin(0.5);
-        this.ratingHUD = this.add.text(padding, currentY, 'PRODUCTION GOAL: 0%', {
-            fontSize: '24px',
+        const barX = sidebarWidth - padding - 10;
+        this.ratingHUD = this.add.text(padding + 8, currentY + 8, 'GOAL: 0%', {
+            fontSize: '22px',
             fontFamily: '"VT323", monospace',
             color: '#f5c518'
         }).setOrigin(0, 0);
-        this.scoreLabel = this.add.text(padding, currentY + 34, 'BUDGET: $0.0M', {
-            fontSize: '24px',
+        this.scoreLabel = this.add.text(padding + 8, currentY + 40, 'BUDGET: $0.0M', {
+            fontSize: '22px',
             fontFamily: '"VT323", monospace',
             color: '#8cff98'
         }).setOrigin(0, 0);
-        this.ballLabel = this.add.text(padding, currentY + 68, 'FILM STOCK: 10', {
-            fontSize: '24px',
+        this.ballLabel = this.add.text(padding + 8, currentY + 72, 'REELS: 10', {
+            fontSize: '22px',
             fontFamily: '"VT323", monospace',
             color: '#ffd2d2'
         }).setOrigin(0, 0);
-        this.progressFrame = this.add.rectangle(sidebarWidth - 34, currentY + 54, 20, 118, 0x060606, 1)
-            .setStrokeStyle(3, 0xffaa00);
-        this.progressFill = this.add.rectangle(sidebarWidth - 34, currentY + 109, 10, 0, 0x66f2ff, 1).setOrigin(0.5, 1);
+        this.progressFrame = this.add.rectangle(barX, currentY + 52, 14, 96, 0x060606, 1)
+            .setStrokeStyle(2, 0xffaa00);
+        this.progressFill = this.add.rectangle(barX, currentY + 52 + 48, 6, 0, 0x66f2ff, 1).setOrigin(0.5, 1);
         this.sidebar.add([statsBox, this.ratingHUD, this.scoreLabel, this.ballLabel, this.progressFrame, this.progressFill]);
-        currentY += 110;
+        currentY += 118;
 
         this.padModeButton = UI.createChunkyButton(this, sidebarWidth / 2, currentY + 30, sidebarWidth - 36, 58, 'PLACE PADS', () => {
             this.togglePadMode();
@@ -504,32 +513,22 @@ export default class PachinkoScene extends Phaser.Scene {
         this.sidebar.add(this.lockStatusText);
         currentY += 58;
 
-        const bioStr = UI.getSafeSnippet(this.directorData.cinematicFact || '', 120);
-        this.bioText = this.add.text(padding, currentY, bioStr, {
-            fontSize: '18px',
+        this.castListText = this.add.text(padding + 4, this.boardHeight - 280, 'CAST:', {
+            fontSize: '16px',
             fontFamily: '"VT323", monospace',
-            color: '#aaaaaa',
-            wordWrap: { width: innerWidth },
-            lineSpacing: 4
-        }).setOrigin(0, 0);
-        this.sidebar.add(this.bioText);
-
-        this.castListText = this.add.text(padding, this.scale.height - 430, 'CAST: WAIT FOR IT...', {
-            fontSize: '18px',
-            fontFamily: '"VT323", monospace',
-            color: '#dddddd',
+            color: '#888888',
             wordWrap: { width: innerWidth }
         }).setOrigin(0, 0);
         this.sidebar.add(this.castListText);
 
-        this.castRowY = this.scale.height - 340;
+        this.castRowY = this.boardHeight - 240;
         const directorPortraitCard = this.createPortraitCard({
             x: sidebarWidth / 2,
-            y: this.scale.height - 150,
+            y: this.boardHeight - 88,
             texture: this.textures.exists('director_portraits') ? 'director_portraits' : null,
             frame: this.directorData.portraitFrame ?? 0,
-            width: 110,
-            height: 110,
+            width: 90,
+            height: 90,
             footerLabel: 'DIRECTOR',
             fallbackText: this.directorData.name.split(' ').map((part) => part[0]).join('')
         });
@@ -625,12 +624,12 @@ export default class PachinkoScene extends Phaser.Scene {
         const safeTarget = Math.max(1, this.levelData?.targetScore || 1);
 
         this.scoreLabel.setText(`BUDGET: ${GameState.formatMillions(this.currentScore)}`);
-        this.ballLabel.setText(`FILM STOCK: ${safeBallsRemaining}`);
+        this.ballLabel.setText(`REELS: ${safeBallsRemaining}`);
 
         const percentage = Math.min(100, Math.floor((this.currentScore / safeTarget) * 100));
-        this.ratingHUD.setText(`PRODUCTION GOAL: ${percentage}%`);
+        this.ratingHUD.setText(`GOAL: ${percentage}%`);
         if (this.progressFill) {
-            const maxHeight = 106;
+            const maxHeight = 90;
             const fillHeight = Math.max(2, maxHeight * (percentage / 100));
             this.progressFill.height = fillHeight;
         }
@@ -682,12 +681,14 @@ export default class PachinkoScene extends Phaser.Scene {
         }
 
         const actor = this.leadCast[index];
+        const actorW = 40;
+        const actorH = 54;
         const portrait = this.createPortraitCard({
-            x: 58 + (index * 96),
+            x: this.sidebarWidth - actorW / 2 - 16 - index * (actorW + 12),
             y: this.castRowY,
             texture: this.textures.exists(`actor_profile_${index}`) ? `actor_profile_${index}` : null,
-            width: 60,
-            height: 80,
+            width: actorW,
+            height: actorH,
             footerLabel: actor.name.split(' ')[0].toUpperCase(),
             fallbackText: actor.name.split(' ').map((part) => part[0]).join('')
         });
@@ -715,7 +716,7 @@ export default class PachinkoScene extends Phaser.Scene {
             onClose: () => this.matter.world.resume()
         });
 
-        this.settingsBtn = UI.createSettingsButton(this, this.sidebarWidth - 70, 58, () => {
+        this.settingsBtn = UI.createSettingsButton(this, this.sidebarWidth - 50, 80, () => {
             const settings = GameState.getAudioSettings(this);
             if (!this.sound.mute && this.cache.audio.exists('sfx_gear')) {
                 this.sound.play('sfx_gear', { volume: 0.8 * (settings.sfxVolume ?? 1) });
@@ -847,42 +848,55 @@ export default class PachinkoScene extends Phaser.Scene {
     }
 
     handlePegCollision(ball, peg) {
-        ball.scoreMultiplier *= (peg.multiplier || 1);
-        this.currentScore += 10;
-        GameState.currentRun.score = this.currentScore;
-        this.spawnExposureDot(ball.position.x, ball.position.y);
-
+        // --- Visuals always fire ---
         if (peg.visual) {
-            this.tweens.add({
-                targets: peg.visual,
-                scaleX: 1.5,
-                scaleY: 1.5,
-                duration: 100,
-                yoyo: true
-            });
+            this.tweens.add({ targets: peg.visual, scaleX: 1.5, scaleY: 1.5, duration: 100, yoyo: true });
         }
-
-        if (peg.isRotatingBouncer) {
-            peg.rotationSpeed *= -1;
-        }
-
-        // Trigger scanline reactive jitter
+        if (peg.isRotatingBouncer) peg.rotationSpeed *= -1;
         this.game.events.emit('game-impact', 0.5);
-
         if (!this.sound.mute && this.cache.audio.exists('tick')) {
             this.sound.play('tick', {
                 volume: 0.1 * (GameState.getAudioSettings(this).sfxVolume ?? 1),
                 rate: Phaser.Math.FloatBetween(0.8, 1.2)
             });
         }
+
+        // --- Economy debounce: 100ms cooldown per ball between scored peg hits ---
+        const now = this.time.now;
+        const PEG_COOLDOWN_MS = 100;
+        if ((now - (ball.lastPegHitTime || 0)) < PEG_COOLDOWN_MS) return;
+        ball.lastPegHitTime = now;
+
+        // --- Diminishing Returns: Each hit on the same peg yields 50% less ---
+        peg.bounceCount = (peg.bounceCount || 0) + 1;
+        const bounceMult = Math.pow(0.5, peg.bounceCount - 1);
+
+        // Cap multiplier at 16× to prevent exponential runaway
+        const MAX_MULTIPLIER = 16;
+        ball.scoreMultiplier = Math.min((ball.scoreMultiplier || 1) * (peg.multiplier || 1), MAX_MULTIPLIER);
+
+        const earned = Math.round(10 * bounceMult);
+        this.currentScore += earned;
+        this.currentScore = Math.min(this.currentScore, MAX_RUN_BUDGET - this.runScoreBase);
+        
+        GameState.currentRun.score = Math.min(this.runScoreBase + this.currentScore, MAX_RUN_BUDGET);
+        this.spawnExposureDot(ball.position.x, ball.position.y);
         this.updateUI();
     }
 
     checkBallBucketCollision(ball, bucket) {
+        // Guard against duplicate sensor firings for the same ball
+        if (ball.bucketTriggered) return;
+        ball.bucketTriggered = true;
+
         const scoreStr = bucket.label.split('_')[1];
-        const points = Number(scoreStr) * (ball.scoreMultiplier || 1) * (ball.isOscarBall ? 2.5 : 1);
+        const rawPoints = Number(scoreStr) * (ball.scoreMultiplier || 1) * (ball.isOscarBall ? 2.5 : 1);
+        // Cap a single drop at 50% of the level target to prevent runaway scoring
+        const points = Math.min(rawPoints, (this.levelData?.targetScore || 10000) * 0.5);
         this.currentScore += points;
-        GameState.currentRun.score = this.currentScore;
+        this.currentScore = Math.min(this.currentScore, MAX_RUN_BUDGET - this.runScoreBase);
+        
+        GameState.currentRun.score = Math.min(this.runScoreBase + this.currentScore, MAX_RUN_BUDGET);
         this.updateUI();
         this.cameras.main.shake(100, 0.01);
 
@@ -923,7 +937,7 @@ export default class PachinkoScene extends Phaser.Scene {
 
     handleBallEaterCollision(ball, eater) {
         this.currentScore = Math.max(0, this.currentScore - 50);
-        GameState.currentRun.score = this.currentScore;
+        GameState.currentRun.score = this.runScoreBase + this.currentScore;
         this.updateUI();
         this.addBark('Ball eater! -$50M', eater.visual);
         this.removeBall(ball);
@@ -974,7 +988,7 @@ export default class PachinkoScene extends Phaser.Scene {
         bonus = Math.round(bonus);
 
         this.currentScore += bonus;
-        GameState.currentRun.score = this.currentScore;
+        GameState.currentRun.score = this.runScoreBase + this.currentScore;
         this.updateUI();
         
         // Trigger scanline reactive jitter for Oscar!
@@ -1130,6 +1144,7 @@ export default class PachinkoScene extends Phaser.Scene {
         this.levelTransitioning = true;
         this.pendingRoundWin = false;
         GameState.currentRun.lastRoundScore = this.currentScore;
+        GameState.currentRun.lastTargetScore = this.levelData.targetScore;
         GameState.currentRun.lastRating = Math.max(0, Math.round((this.currentScore / this.levelData.targetScore) * 10) / 10);
 
         // IMDb Ranking Connection

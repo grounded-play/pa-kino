@@ -64,11 +64,16 @@ export default class MenuScene extends Phaser.Scene {
             label: 'menu_bumper'
         });
         this.titleLogo = this.bgScene.matter.add.image(width / 2, -300, 'tcc_logo', null, {
+            isSensor: true,
             restitution: 0.7,
             friction: 0.03,
             frictionAir: 0.002,
             density: 0.0012,
-            label: 'menu_logo'
+            label: 'menu_logo',
+            collisionFilter: {
+                category: this.bgScene.CAT_LOGO,
+                mask: 0 // Logo ignores everything
+            }
         });
         this.titleLogo.setOrigin(0.5);
         this.logoScale = 240 / this.titleLogo.width;
@@ -590,7 +595,7 @@ export default class MenuScene extends Phaser.Scene {
         }
 
         const titleText = this.add.text(0, 0, displayText.toUpperCase(), {
-            fontSize: isDirector ? '11px' : '12px',
+            fontSize: '12px',
             fontFamily: '"VT323", monospace',
             color: (isDirector ? (capturedCount > 0) : unlocked) ? '#ffffff' : '#444444',
             align: 'center',
@@ -600,8 +605,12 @@ export default class MenuScene extends Phaser.Scene {
         // Thumbnail for unlocked films or 5/5 directors
         const showThumb = (!isDirector && unlocked && item.posterPath) || (isDirector && capturedCount >= 5);
         if (showThumb) {
-            const thumbKey = isDirector ? 'director_portraits' : `thumb_${item.id || item.title}`;
-            
+            // Prefer the BootScene-preloaded texture (poster_<id>) to avoid re-fetching
+            const preloadedKey = item.id ? `poster_${item.id}` : null;
+            const thumbKey = isDirector
+                ? 'director_portraits'
+                : (preloadedKey && this.textures.exists(preloadedKey) ? preloadedKey : `thumb_${item.id || item.title}`);
+
             const handleThumbReady = () => {
                 if (container && container.scene) {
                     // Safety check to ensure we don't add duplicate thumbs
@@ -613,9 +622,9 @@ export default class MenuScene extends Phaser.Scene {
                     }
                     thumb.setDisplaySize(width, height).setAlpha(isDirector ? 1 : 0.85);
                     container.add(thumb);
-                    thumb.setDepth(5); 
+                    thumb.setDepth(5);
                     container.setData('hasThumb', true);
-                    
+
                     titleText.setStroke('#000', 8);
                     if (isDirector) {
                         titleText.setY(height/2 - 18);
@@ -627,6 +636,7 @@ export default class MenuScene extends Phaser.Scene {
             if (isDirector || this.textures.exists(thumbKey)) {
                 handleThumbReady();
             } else if (item.posterPath) {
+                this.load.crossOrigin = 'anonymous';
                 this.load.image(thumbKey, item.posterPath);
                 this.load.once(`filecomplete-image-${thumbKey}`, handleThumbReady);
                 this.load.start();
@@ -802,8 +812,14 @@ export default class MenuScene extends Phaser.Scene {
                 this.memoryOverlay.add(this.memoryPosterImage);
                 this.memoryCardPosterText.setText('');
             } else {
-                const key = `memory_card_${item.type}_${item.film?.id || item.title}`;
+                // Prefer BootScene-preloaded texture (poster_<id>) before dynamic fetch
+                const preloadedKey = item.film?.id ? `poster_${item.film.id}` : null;
+                const key = (preloadedKey && this.textures.exists(preloadedKey))
+                    ? preloadedKey
+                    : `memory_card_${item.type}_${item.film?.id || item.title}`;
+
                 if (!this.textures.exists(key)) {
+                    this.load.crossOrigin = 'anonymous';
                     this.load.image(key, item.posterPath);
                     this.load.once('complete', () => {
                         if (this.memoryCardItems[this.memoryCardIndex] === item) {

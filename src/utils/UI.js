@@ -323,7 +323,7 @@ export const UI = {
             .setVisible(false);
         container.bg = bg;
         const panelWidth = 440;
-        const panelHeight = options.showAbandon ? 810 : 710;
+        const panelHeight = options.showAbandon ? 870 : 770;
         const panel = scene.add.rectangle(0, 0, panelWidth, panelHeight, 0x1a1a1a).setStrokeStyle(4, 0xffaa00);
 
         const title = scene.add.text(0, -panelHeight / 2 + 40, 'PRODUCTION SETTINGS', {
@@ -359,7 +359,23 @@ export const UI = {
             GameState.applyAudioSettings(scene);
         });
 
-        const scanlinesLabel = scene.add.text(-sliderWidth / 2, startY + 270, 'SCANLINES', {
+        // Mute toggle
+        const muteLabel = scene.add.text(-sliderWidth / 2, startY + 270, 'MUTE AUDIO', {
+            fontSize: '20px',
+            fontFamily: '"VT323", monospace',
+            color: '#aaa'
+        });
+        const muteBtn = this.createChunkyButton(scene, 70, startY + 292, 150, 48,
+            stats.audioMuted ? 'ON' : 'OFF',
+            () => {
+                const nowMuted = !GameState.persistentStats.audioMuted;
+                GameState.setAudioSettings({ audioMuted: nowMuted }, scene);
+                GameState.applyAudioSettings(scene);
+                if (muteBtn.list?.[1]) muteBtn.list[1].setText(nowMuted ? 'ON' : 'OFF');
+            }
+        );
+
+        const scanlinesLabel = scene.add.text(-sliderWidth / 2, startY + 352, 'SCANLINES', {
             fontSize: '20px',
             fontFamily: '"VT323", monospace',
             color: '#aaa'
@@ -382,9 +398,9 @@ export const UI = {
         const scanlinesBtn = this.createChunkyButton(
             scene,
             70,
-            startY + 290,
+            startY + 374,
             150,
-            50,
+            48,
             displaySettings.scanlinesEnabled ? 'ON' : 'OFF',
             () => {
                 const nextValue = !GameState.getDisplaySettings(scene).scanlinesEnabled;
@@ -395,7 +411,7 @@ export const UI = {
             }
         );
 
-        const fullscreenLabel = scene.add.text(-sliderWidth / 2, startY + 360, 'FULLSCREEN', {
+        const fullscreenLabel = scene.add.text(-sliderWidth / 2, startY + 436, 'FULLSCREEN', {
             fontSize: '20px',
             fontFamily: '"VT323", monospace',
             color: '#aaa'
@@ -416,9 +432,9 @@ export const UI = {
         const fullscreenBtn = this.createChunkyButton(
             scene,
             70,
-            startY + 380,
+            startY + 458,
             150,
-            50,
+            48,
             getFullscreenLabel(),
             () => {
                 if (!fullscreenSupported) {
@@ -524,6 +540,8 @@ export const UI = {
             ...masterElements,
             ...musicElements,
             ...sfxElements,
+            muteLabel,
+            muteBtn,
             scanlinesLabel,
             scanlinesBtn,
             fullscreenLabel,
