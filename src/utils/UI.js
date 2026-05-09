@@ -86,11 +86,6 @@ export const UI = {
                 duration: 80,
                 ease: 'Back.easeOut'
             });
-
-            // Trigger immediately for "Instant" feel
-            if (onClick) {
-                onClick();
-            }
         });
 
         interactiveTarget.on('pointerup', () => {
@@ -101,6 +96,11 @@ export const UI = {
                 duration: 300,
                 ease: 'Elastic.easeOut'
             });
+
+            // Trigger on release for better UX and to avoid "stuck" squish states
+            if (onClick) {
+                onClick();
+            }
         });
 
         interactiveTarget.on('pointerupoutside', () => {

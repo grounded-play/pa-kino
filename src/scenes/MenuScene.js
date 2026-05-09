@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GameState } from '../GameState.js';
+import { GameState, ACHIEVEMENTS } from '../GameState.js';
 import { UI } from '../utils/UI.js';
 import { TMDB } from '../utils/TMDB.js';
 
@@ -432,46 +432,107 @@ export default class MenuScene extends Phaser.Scene {
         this.runMemoryContainer.setDepth(200);
         this.runMemoryContainer.setVisible(false);
         this.memoryOpen = false;
+        this.currentArchiveTab = 'library';
 
         this.memoryCardItems = [];
         this.memoryCardIndex = 0;
 
         const bg = this.add.rectangle(0, 0, width, height, 0x050505, 0.995).setOrigin(0, 0);
 
-        const title = this.add.text(width / 2, 100, 'REEL ARCHIVE', {
-            fontSize: '64px',
+        const title = this.add.text(width / 2, 80, 'REEL ARCHIVE', {
+            fontSize: '72px',
             fontFamily: '"VT323", monospace',
             color: '#ffcc00',
             stroke: '#000000',
-            strokeThickness: 6
+            strokeThickness: 8
         }).setOrigin(0.5);
 
-        const stats = GameState.persistentStats;
-        const statsPanelBg = this.add.graphics();
-        statsPanelBg.fillStyle(0x000000, 0.9);
-        statsPanelBg.lineStyle(2, 0x66f2ff, 0.4);
-        statsPanelBg.fillRoundedRect(width / 2 - 460, 150, 920, 110, 10);
-        statsPanelBg.strokeRoundedRect(width / 2 - 460, 150, 920, 110, 10);
+        // Tab Buttons
+        const tabY = 160;
+        this.libraryTabBtn = UI.createChunkyButton(this, width / 2 - 160, tabY, 300, 60, 'FILM LIBRARY', () => {
+            this.switchArchiveTab('library');
+        });
+        this.achievementsTabBtn = UI.createChunkyButton(this, width / 2 + 160, tabY, 300, 60, 'ACHIEVEMENTS', () => {
+            this.switchArchiveTab('achievements');
+        });
 
-        const statsText = this.add.text(width / 2, 205,
-            `FILMS CAPTURED: ${stats.totalFilmsCompleted || 0}/50   |   REELS DROPPED: ${stats.totalReelsDropped || 0}\n` +
-            `TOTAL RUNS: ${stats.totalRuns}   |   WINS: ${stats.wins}`, {
-                fontSize: '26px',
+        // Tab Indicators (Underlines)
+        this.libraryTabIndicator = this.add.rectangle(width / 2 - 160, tabY + 35, 280, 4, 0xffcc00).setVisible(true);
+        this.achievementsTabIndicator = this.add.rectangle(width / 2 + 160, tabY + 35, 280, 4, 0xffcc00).setVisible(false);
+
+        const stats = GameState.persistentStats;
+        this.archiveStatsText = this.add.text(width / 2, 230,
+            `FILMS CAPTURED: ${stats.totalFilmsCompleted || 0}/50   |   WINS: ${stats.wins}`, {
+                fontSize: '28px',
                 fontFamily: '"VT323", monospace',
                 color: '#66f2ff',
-                align: 'center',
-                stroke: '#000000',
-                strokeThickness: 2,
-                lineSpacing: 4
+                align: 'center'
             }).setOrigin(0.5);
 
-        // 6 columns (Director + 5 films) by 10 rows (1 per director)
-        const gridContainer = this.add.container(width / 2, 348);
+        // 1. Library View
+        this.libraryContainer = this.add.container(width / 2, 360);
+        this.buildLibraryGrid(this.libraryContainer, width, height);
+
+        // 2. Achievements View
+        this.achievementsContainer = this.add.container(width / 2, 360).setVisible(false);
+        this.buildAchievementsGrid(this.achievementsContainer, width, height);
+
+        const closeBtnContainer = UI.createChunkyButton(this, width / 2, height - 100, 240, 70, 'CLOSE', () => {
+            this.toggleRunMemory(width, height);
+        });
+
+        this.buildMemoryOverlay(width, height);
+        this.buildAchievementOverlay(width, height);
+
+        this.runMemoryContainer.add([
+            bg, title, this.libraryTabBtn, this.achievementsTabBtn, 
+            this.libraryTabIndicator, this.achievementsTabIndicator,
+            this.archiveStatsText,
+            this.libraryContainer, this.achievementsContainer,
+            closeBtnContainer, 
+            this.memoryOverlay,
+            this.achievementOverlay
+        ]);
+
+        this.runMemoryContainer.setDepth(4500);
+        this.runArchiveTabUpdate();
+    }
+
+    switchArchiveTab(tab) {
+        if (this.currentArchiveTab === tab) return;
+        this.currentArchiveTab = tab;
+        this.runArchiveTabUpdate();
+        
+        const settings = GameState.getAudioSettings(this);
+        if (!this.sound.mute && this.cache.audio.exists('sfx_ui_click')) {
+            this.sound.play('sfx_ui_click', { volume: 0.5 * (settings.sfxVolume ?? 1) });
+        }
+    }
+
+    runArchiveTabUpdate() {
+        const isLib = this.currentArchiveTab === 'library';
+        this.libraryContainer.setVisible(isLib);
+        this.achievementsContainer.setVisible(!isLib);
+        
+        // Update indicators
+        this.libraryTabIndicator.setVisible(isLib);
+        this.achievementsTabIndicator.setVisible(!isLib);
+
+        const stats = GameState.persistentStats;
+        if (isLib) {
+            this.archiveStatsText.setText(`FILMS CAPTURED: ${stats.totalFilmsCompleted || 0}/50   |   WINS: ${stats.wins}`);
+        } else {
+            const unlockedCount = Object.keys(stats.achievements || {}).length;
+            this.archiveStatsText.setText(`ACHIEVEMENTS: ${unlockedCount}/${ACHIEVEMENTS.length}   |   LEGEND STATUS: ${Math.floor((unlockedCount/ACHIEVEMENTS.length)*100)}%`);
+        }
+    }
+
+    buildLibraryGrid(container, width, height) {
+        this.memoryCardItems = [];
         const directors = TMDB.getHardcodedDirectors();
         const campaignData = TMDB.CAMPAIGN_DATA;
         const persistentGallery = GameState.persistentGallery;
 
-        // Truly Portrait cards (Taller than wide)
         const colWidth = 100; 
         const rowHeight = 135;
         const startX = -((6 * colWidth) / 2) + (colWidth / 2);
@@ -479,8 +540,6 @@ export default class MenuScene extends Phaser.Scene {
 
         directors.forEach((director, dirIndex) => {
             const dirY = startY + (dirIndex * (rowHeight + 6));
-            
-            // 1. The Director Card (First column)
             const films = campaignData[director.name] || [];
             const capturedCount = films.filter(f => persistentGallery.some(g => g.id === f.id)).length;
             
@@ -496,14 +555,11 @@ export default class MenuScene extends Phaser.Scene {
             
             const dirCard = this.createMemoryGridCard(startX, dirY, colWidth - 8, rowHeight, dirItem, this.memoryCardItems.length);
             this.memoryCardItems.push(dirItem);
-            gridContainer.add(dirCard);
+            container.add(dirCard);
 
-            // 2. The 5 Films
             films.forEach((film, filmIndex) => {
                 const unlocked = persistentGallery.some(g => g.id === film.id);
                 const x = startX + ((filmIndex + 1) * colWidth);
-                const y = dirY;
-
                 const item = {
                     type: 'film',
                     title: film.title,
@@ -515,26 +571,120 @@ export default class MenuScene extends Phaser.Scene {
                     film: film
                 };
 
-                const card = this.createMemoryGridCard(x, y, colWidth - 8, rowHeight, item, this.memoryCardItems.length);
+                const card = this.createMemoryGridCard(x, dirY, colWidth - 8, rowHeight, item, this.memoryCardItems.length);
                 this.memoryCardItems.push(item);
-                gridContainer.add(card);
+                container.add(card);
             });
         });
+    }
 
-        const closeBtnContainer = UI.createChunkyButton(this, width / 2, height - 120, 240, 70, 'CLOSE', () => {
-            this.toggleRunMemory(width, height);
+    buildAchievementsGrid(container, width, height) {
+        const stats = GameState.persistentStats;
+        const colWidth = 155;
+        const rowHeight = 175;
+        const cols = 6;
+        const startX = -((cols * colWidth) / 2) + (colWidth / 2);
+        const startY = 10;
+
+        ACHIEVEMENTS.forEach((ach, index) => {
+            const row = Math.floor(index / cols);
+            const col = index % cols;
+            const x = startX + (col * colWidth);
+            const y = startY + (row * (rowHeight + 10));
+            
+            const unlocked = Boolean(stats.achievements[ach.id]);
+            const card = this.createAchievementCard(x, y, colWidth - 10, rowHeight, ach, unlocked);
+            container.add(card);
+        });
+    }
+
+    createAchievementCard(x, y, width, height, ach, unlocked) {
+        const container = this.add.container(x, y);
+        const bg = this.add.rectangle(0, 0, width, height, unlocked ? 0x221100 : 0x111111, 0.95)
+            .setStrokeStyle(3, unlocked ? 0xffcc00 : 0x333333);
+        
+        const icon = this.add.circle(0, -30, 40, unlocked ? 0xffcc00 : 0x222222)
+            .setStrokeStyle(4, unlocked ? 0xffffff : 0x444444);
+        
+        const iconLabel = this.add.text(0, -30, ach.id.includes('DIR') ? 'DIR' : '★', {
+            fontSize: '32px',
+            fontFamily: '"VT323", monospace',
+            color: unlocked ? '#000000' : '#444444'
+        }).setOrigin(0.5);
+
+        const titleText = this.add.text(0, 45, (unlocked ? ach.title : '????').toUpperCase(), {
+            fontSize: '14px',
+            fontFamily: '"VT323", monospace',
+            color: unlocked ? '#ffffff' : '#666666',
+            align: 'center',
+            wordWrap: { width: width - 10 }
+        }).setOrigin(0.5);
+
+        const hitArea = this.add.rectangle(0, 0, width, height, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
+        
+        container.add([bg, icon, iconLabel, titleText, hitArea]);
+        
+        UI.makeSquishyButton(this, container, () => {
+            this.openAchievementDetails(ach, unlocked);
+        }, { hitTarget: hitArea });
+
+        return container;
+    }
+
+    buildAchievementOverlay(width, height) {
+        this.achievementOverlay = this.add.container(width / 2, height / 2).setDepth(5100).setVisible(false);
+        const dim = this.add.rectangle(0, 0, width * 2, height * 2, 0x000000, 0.9).setInteractive();
+        const panel = this.add.rectangle(0, 0, 600, 400, 0x17110b, 0.98).setStrokeStyle(5, 0xffaa00);
+        
+        this.achDetailTitle = this.add.text(0, -120, '', {
+            fontSize: '48px',
+            fontFamily: '"VT323", monospace',
+            color: '#ffcc00',
+            align: 'center',
+            wordWrap: { width: 500 }
+        }).setOrigin(0.5);
+
+        this.achDetailDesc = this.add.text(0, 20, '', {
+            fontSize: '32px',
+            fontFamily: '"VT323", monospace',
+            color: '#ffffff',
+            align: 'center',
+            wordWrap: { width: 500 }
+        }).setOrigin(0.5);
+
+        this.achDetailStatus = this.add.text(0, 100, '', {
+            fontSize: '24px',
+            fontFamily: '"VT323", monospace',
+            color: '#ffaa00'
+        }).setOrigin(0.5);
+
+        const closeBtn = UI.createChunkyButton(this, 0, 160, 180, 60, 'CLOSE', () => {
+            this.achievementOverlay.setVisible(false);
         });
 
-        this.buildMemoryOverlay(width, height);
+        dim.on('pointerdown', () => this.achievementOverlay.setVisible(false));
+        this.achievementOverlay.add([dim, panel, this.achDetailTitle, this.achDetailDesc, this.achDetailStatus, closeBtn]);
+    }
 
-        this.runMemoryContainer.add([
-            bg, title, statsPanelBg, statsText, 
-            gridContainer, closeBtnContainer, 
-            this.memoryOverlay
-        ]);
+    openAchievementDetails(ach, unlocked) {
+        this.achDetailTitle.setText((unlocked ? ach.title : 'LOCKED ACHIEVEMENT').toUpperCase());
+        this.achDetailDesc.setText(unlocked ? ach.desc : 'Condition has not yet been met.');
+        
+        if (unlocked) {
+            const date = new Date(GameState.persistentStats.achievements[ach.id]);
+            this.achDetailStatus.setText(`UNLOCKED: ${date.toLocaleDateString()}`);
+            this.achDetailStatus.setColor('#00ff88');
+        } else {
+            this.achDetailStatus.setText('STATUS: ENCRYPTED');
+            this.achDetailStatus.setColor('#ff4444');
+        }
 
-        this.runMemoryContainer.setDepth(4500);
-        this.runMemoryContainer.setVisible(false);
+        this.achievementOverlay.setVisible(true);
+        
+        const settings = GameState.getAudioSettings(this);
+        if (!this.sound.mute && this.cache.audio.exists('sfx_ui_click')) {
+            this.sound.play('sfx_ui_click', { volume: 0.6 * (settings.sfxVolume ?? 1) });
+        }
     }
 
     toggleRunMemory(width, height) {

@@ -25,6 +25,8 @@ export const GameState = {
         unlockedDirectors: [],
         directorProgress: {},
         filmHighScores: {},
+        perfectFilms: [], // IDs of films with 10.0 rating
+        achievements: {}, // id: timestamp
         bestRating: 0,
         bestRatingFilm: '',
         bestGross: 0,
@@ -262,14 +264,18 @@ export const GameState = {
 
         this.unlockFilm(film, this.currentRun.directorName);
 
-        if (!this.currentRun.completedFilms.find((entry) => entry.id === film.id)) {
-            const completedEntry = { 
+        let completedEntry = this.currentRun.completedFilms.find((entry) => entry.id === film.id);
+        
+        if (!completedEntry) {
+            completedEntry = { 
                 ...film, 
                 directorName: this.currentRun.directorName,
                 rating: this.currentRun.lastRating || 0,
                 gross: this.currentRun.lastGrossRoundScore || 0,
                 cost: this.currentRun.lastProductionCost || 0,
-                net: this.currentRun.lastNetRoundScore || 0
+                net: this.currentRun.lastNetRoundScore || 0,
+                castCount: this.currentRun.lastCastCount || 0,
+                oscarCount: this.currentRun.lastOscarCount || 0
             };
             this.currentRun.completedFilms.push(completedEntry);
             this.persistentStats.totalFilmsCompleted += 1;
@@ -307,6 +313,12 @@ export const GameState = {
         }
 
         this.persistentStats.highestLevel = Math.max(this.persistentStats.highestLevel, this.currentRun.currentFilmIndex + 1);
+        
+        if (completedEntry.rating >= 10.0 && !this.persistentStats.perfectFilms.includes(filmKey)) {
+            this.persistentStats.perfectFilms.push(filmKey);
+        }
+
+        this.checkAchievements();
         this.saveData();
     },
 
@@ -356,6 +368,7 @@ export const GameState = {
             }
         }
 
+        this.checkAchievements({ isWin, runEnded: true });
         this.saveData();
     },
 
@@ -536,7 +549,111 @@ export const GameState = {
         this.persistentStats.audioMuted = !this.persistentStats.audioMuted;
         this.saveData();
         return this.persistentStats.audioMuted;
+    },
+
+    checkAchievements(context = {}) {
+        const stats = this.persistentStats;
+        const run = this.currentRun;
+        const gallery = this.persistentGallery;
+        const now = Date.now();
+
+        const unlock = (id) => {
+            if (!stats.achievements[id]) {
+                stats.achievements[id] = now;
+                console.log(`ACHIEVEMENT UNLOCKED: ${id}`);
+                return true;
+            }
+            return false;
+        };
+
+        // 1-10. Director Mastery
+        const directors = [
+            'Akira Kurosawa', 'Agnès Varda', 'Satyajit Ray', 'Spike Lee', 'Jane Campion',
+            'Bong Joon-ho', 'Guillermo del Toro', 'John Singleton', 'Ava DuVernay', 'Chloe Zhao'
+        ];
+        directors.forEach((name, i) => {
+            if (stats.directorProgress[name] >= 5) {
+                unlock(`DIR_${(i + 1).toString().padStart(2, '0')}`);
+            }
+        });
+
+        // 11. Cut! (First Game Over)
+        if (stats.totalRuns > stats.wins) unlock('GAME_OVER');
+
+        // 12. The End (First Win)
+        if (stats.wins > 0) unlock('WIN_01');
+
+        // 13. Halfway There (25 movies)
+        if (gallery.length >= 25) unlock('HALF_GALLERY');
+
+        // 14. The Archivist (50 movies)
+        if (gallery.length >= 50) unlock('FULL_GALLERY');
+
+        // 15. Critics' Choice (10.0 Rating)
+        if (stats.bestRating >= 10.0) unlock('PERFECT_10');
+
+        // 16. Masterpiece (Perfect 10.0 Run)
+        if (context.isWin && run.completedFilms.every(f => f.rating >= 10.0)) {
+            unlock('PERFECT_RUN');
+        }
+
+        // 17. Perfect Gallery (All 50 with 10.0)
+        if (stats.perfectFilms.length >= 50) unlock('PERFECT_ALL');
+
+        // 18. Big Budget ($100M film - 10,000 score units)
+        if (stats.bestGross >= 10000) unlock('SCORE_100M');
+
+        // 19. Billionaire Club ($1,000M lifetime - 100,000 score units)
+        if (stats.lifetimeScore >= 100000) unlock('CAREER_1B');
+
+        // 20. Oscar Winner (First Oscar)
+        if (run.lastOscarCount > 0) unlock('OSCAR_01');
+
+        // 21. Ensemble (3 actors in 1 film)
+        if (run.lastCastCount >= 3) unlock('ENSEMBLE');
+
+        // 22. Blockbuster (200% profit)
+        if (run.lastGrossRoundScore >= run.lastProductionCost * 2 && run.lastProductionCost > 0) {
+            unlock('PROFIT_200');
+        }
+
+        // 23. Efficiency Expert (Actual <= Expected reels)
+        if (run.lastReelsDropped > 0 && run.lastReelsDropped <= run.lastExpectedReels) {
+            unlock('EFFICIENCY');
+        }
+
+        // 24. Casting Legend (3 actors in every film of a run)
+        if (context.runEnded && run.completedFilms.length >= 5 && run.completedFilms.every(f => (f.castCount || 0) >= 3)) {
+            unlock('CASTING_STREAK');
+        }
     }
 };
+
+export const ACHIEVEMENTS = [
+    { id: 'DIR_01', title: 'MASTER OF MOTION', desc: 'Capture all 5 Akira Kurosawa films.' },
+    { id: 'DIR_02', title: 'THE LEFT BANK', desc: 'Capture all 5 Agnès Varda films.' },
+    { id: 'DIR_03', title: 'THE HUMANIST', desc: 'Capture all 5 Satyajit Ray films.' },
+    { id: 'DIR_04', title: 'THE VISIONARY', desc: 'Capture all 5 Spike Lee films.' },
+    { id: 'DIR_05', title: 'POETIC JUSTICE', desc: 'Capture all 5 Jane Campion films.' },
+    { id: 'DIR_06', title: 'GENRE BENDER', desc: 'Capture all 5 Bong Joon-ho films.' },
+    { id: 'DIR_07', title: 'MONSTER MAKER', desc: 'Capture all 5 Guillermo del Toro films.' },
+    { id: 'DIR_08', title: 'URBAN REALIST', desc: 'Capture all 5 John Singleton films.' },
+    { id: 'DIR_09', title: 'DRAMA QUEEN', desc: 'Capture all 5 Ava DuVernay films.' },
+    { id: 'DIR_10', title: 'INDIE NOMAD', desc: 'Capture all 5 Chloe Zhao films.' },
+    { id: 'GAME_OVER', title: 'CUT!', desc: 'Experience your first production failure.' },
+    { id: 'WIN_01', title: 'THE END', desc: 'Complete a full 5-film campaign.' },
+    { id: 'HALF_GALLERY', title: 'HALFWAY THERE', desc: 'Unlock 25 movies in the archive.' },
+    { id: 'FULL_GALLERY', title: 'THE ARCHIVIST', desc: 'Unlock all 50 movies in the archive.' },
+    { id: 'PERFECT_10', title: "CRITICS' CHOICE", desc: 'Earn a perfect 10.0 rating on a film.' },
+    { id: 'PERFECT_RUN', title: 'MASTERPIECE', desc: 'Finish a run with all 5 films rated 10.0.' },
+    { id: 'PERFECT_ALL', title: 'PERFECT GALLERY', desc: 'Unlock all 50 movies with a 10.0 rating.' },
+    { id: 'SCORE_100M', title: 'BIG BUDGET', desc: 'Earn over $100.0 Mil in a single film.' },
+    { id: 'CAREER_1B', title: 'BILLIONAIRE CLUB', desc: 'Earn over $1,000.0 Mil in lifetime gross.' },
+    { id: 'OSCAR_01', title: 'OSCAR WINNER', desc: 'Collect your first Oscar.' },
+    { id: 'ENSEMBLE', title: 'ENSEMBLE CAST', desc: 'Catch all 3 actors in a single film.' },
+    { id: 'PROFIT_200', title: 'BLOCKBUSTER', desc: 'Earn 200% profit in a single film.' },
+    { id: 'EFFICIENCY', title: 'EFFICIENCY EXPERT', desc: 'Finish a film using expected reels or less.' },
+    { id: 'CASTING_STREAK', title: 'CASTING LEGEND', desc: 'Catch 3 actors in every film of a run.' }
+];
 
 GameState.loadData();
