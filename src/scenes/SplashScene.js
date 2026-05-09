@@ -6,7 +6,7 @@ export default class SplashScene extends Phaser.Scene {
     }
 
     preload() {
-        this.load.image('tcc_logo', '/assets/images/Logo.jpg');
+        this.load.image('tcc_logo', 'assets/images/Logo.jpg');
     }
 
     create() {

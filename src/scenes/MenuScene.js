@@ -12,8 +12,8 @@ export default class MenuScene extends Phaser.Scene {
     }
 
     preload() {
-        this.load.image('tcc_logo', '/assets/images/Logo.jpg');
-        this.load.image('gametitle', '/assets/images/gametitle.png');
+        this.load.image('tcc_logo', 'assets/images/Logo.jpg');
+        this.load.image('gametitle', 'assets/images/gametitle.png');
     }
 
     create() {

@@ -147,9 +147,9 @@ export default class PachinkoScene extends Phaser.Scene {
             }
         });
 
-        this.load.svg('filmreel', '/assets/images/film.svg', { width: 30, height: 30 });
-        this.load.svg('vhs', '/assets/images/vhs.svg', { width: 30, height: 30 });
-        this.load.svg('dvd', '/assets/images/dvd.svg', { width: 30, height: 30 });
+        this.load.svg('filmreel', 'assets/images/film.svg', { width: 30, height: 30 });
+        this.load.svg('vhs', 'assets/images/vhs.svg', { width: 30, height: 30 });
+        this.load.svg('dvd', 'assets/images/dvd.svg', { width: 30, height: 30 });
     }
 
     create(data) {

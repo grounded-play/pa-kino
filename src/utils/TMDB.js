@@ -492,7 +492,7 @@ export const TMDB = {
     getFallbackSelection() {
         const baseDirector = this.getHardcodedDirectors().find((director) => director.name === 'Akira Kurosawa')
             || this.getHardcodedDirectors()[0];
-        const placeholderPath = '/assets/images/Logo.jpg';
+        const placeholderPath = 'assets/images/Logo.jpg';
 
         return {
             ...baseDirector,

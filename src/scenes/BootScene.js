@@ -111,22 +111,22 @@ export default class BootScene extends Phaser.Scene {
         });
 
         // --- Audio ---
-        this.load.audio('bgm', '/assets/sounds/mainsong.mp3');
-        this.load.audio('tick', '/assets/sounds/clickslow.wav');
-        this.load.audio('click_fast', '/assets/sounds/clickfast.wav');
-        this.load.audio('click_slow', '/assets/sounds/clickslow.wav');
-        this.load.audio('sfx_oscar', '/assets/sounds/oscar.wav');
-        this.load.audio('sfx_gear', '/assets/sounds/gear.wav');
-        this.load.audio('sfx_title', '/assets/sounds/title.wav');
-        this.load.audio('sfx_abandon', '/assets/sounds/badpress.wav');
-        this.load.audio('sfx_click', '/assets/sounds/goodpress.wav');
-        this.load.audio('sfx_explosion', '/assets/sounds/explosion.wav');
-        this.load.audio('sfx_win1', '/assets/sounds/win1.wav');
-        this.load.audio('sfx_win2', '/assets/sounds/win2.wav');
-        this.load.audio('sfx_win3', '/assets/sounds/win3.wav');
-        this.load.audio('sfx_win4', '/assets/sounds/win4.wav');
+        this.load.audio('bgm', 'assets/sounds/mainsong.mp3');
+        this.load.audio('tick', 'assets/sounds/clickslow.wav');
+        this.load.audio('click_fast', 'assets/sounds/clickfast.wav');
+        this.load.audio('click_slow', 'assets/sounds/clickslow.wav');
+        this.load.audio('sfx_oscar', 'assets/sounds/oscar.wav');
+        this.load.audio('sfx_gear', 'assets/sounds/gear.wav');
+        this.load.audio('sfx_title', 'assets/sounds/title.wav');
+        this.load.audio('sfx_abandon', 'assets/sounds/badpress.wav');
+        this.load.audio('sfx_click', 'assets/sounds/goodpress.wav');
+        this.load.audio('sfx_explosion', 'assets/sounds/explosion.wav');
+        this.load.audio('sfx_win1', 'assets/sounds/win1.wav');
+        this.load.audio('sfx_win2', 'assets/sounds/win2.wav');
+        this.load.audio('sfx_win3', 'assets/sounds/win3.wav');
+        this.load.audio('sfx_win4', 'assets/sounds/win4.wav');
 
-        this.load.spritesheet('director_portraits', '/src/assets/images/spritesheet.fixed.png', {
+        this.load.spritesheet('director_portraits', 'assets/images/spritesheet.png', {
             frameWidth: 204,
             frameHeight: 286,
             margin: 0,

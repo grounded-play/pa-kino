@@ -59,10 +59,10 @@ export default class ShopScene extends Phaser.Scene {
 
     preload() {
         if (!this.textures.exists('icon_film')) {
-            this.load.svg('icon_film', '/src/assets/images/film.svg', { width: 48, height: 48 });
+            this.load.svg('icon_film', 'assets/images/film.svg', { width: 48, height: 48 });
         }
         if (!this.textures.exists('icon_vhs')) {
-            this.load.svg('icon_vhs', '/src/assets/images/vhs.svg', { width: 48, height: 48 });
+            this.load.svg('icon_vhs', 'assets/images/vhs.svg', { width: 48, height: 48 });
         }
     }
 
