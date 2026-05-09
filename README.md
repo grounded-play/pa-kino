@@ -6,6 +6,8 @@
 
 ### *Lights. Camera. Gravity.*
 
+[**🕹️ Play Now on Itch.io**](https://tuesdaycinemaclub.itch.io/pa-kino-super)
+
 [![Phaser](https://img.shields.io/badge/Phaser-v3.60-orange?style=for-the-badge&logo=phaser)](https://phaser.io/)
 [![Vite](https://img.shields.io/badge/Vite-v5-646CFF?style=for-the-badge&logo=vite)](https://vitejs.dev/)
 [![Status](https://img.shields.io/badge/Status-In_Development-brightgreen?style=for-the-badge)](#roadmap)

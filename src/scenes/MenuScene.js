@@ -439,7 +439,7 @@ export default class MenuScene extends Phaser.Scene {
 
         const bg = this.add.rectangle(0, 0, width, height, 0x050505, 0.995).setOrigin(0, 0);
 
-        const title = this.add.text(width / 2, 80, 'REEL ARCHIVE', {
+        const title = this.add.text(width / 2, 110, 'REEL ARCHIVE', {
             fontSize: '72px',
             fontFamily: '"VT323", monospace',
             color: '#ffcc00',
@@ -448,7 +448,7 @@ export default class MenuScene extends Phaser.Scene {
         }).setOrigin(0.5);
 
         // Tab Buttons
-        const tabY = 160;
+        const tabY = 190;
         this.libraryTabBtn = UI.createChunkyButton(this, width / 2 - 160, tabY, 300, 60, 'FILM LIBRARY', () => {
             this.switchArchiveTab('library');
         });
@@ -461,7 +461,7 @@ export default class MenuScene extends Phaser.Scene {
         this.achievementsTabIndicator = this.add.rectangle(width / 2 + 160, tabY + 35, 280, 4, 0xffcc00).setVisible(false);
 
         const stats = GameState.persistentStats;
-        this.archiveStatsText = this.add.text(width / 2, 230,
+        this.archiveStatsText = this.add.text(width / 2, 260,
             `FILMS CAPTURED: ${stats.totalFilmsCompleted || 0}/50   |   WINS: ${stats.wins}`, {
                 fontSize: '28px',
                 fontFamily: '"VT323", monospace',
@@ -470,14 +470,14 @@ export default class MenuScene extends Phaser.Scene {
             }).setOrigin(0.5);
 
         // 1. Library View
-        this.libraryContainer = this.add.container(width / 2, 360);
+        this.libraryContainer = this.add.container(width / 2, 390);
         this.buildLibraryGrid(this.libraryContainer, width, height);
 
         // 2. Achievements View
-        this.achievementsContainer = this.add.container(width / 2, 360).setVisible(false);
+        this.achievementsContainer = this.add.container(width / 2, 390).setVisible(false);
         this.buildAchievementsGrid(this.achievementsContainer, width, height);
 
-        const closeBtnContainer = UI.createChunkyButton(this, width / 2, height - 100, 240, 70, 'CLOSE', () => {
+        const closeBtnContainer = UI.createChunkyButton(this, width / 2, height - 140, 240, 70, 'CLOSE', () => {
             this.toggleRunMemory(width, height);
         });
 
@@ -729,34 +729,33 @@ export default class MenuScene extends Phaser.Scene {
             .setVisible(false);
 
         const panel = this.add.rectangle(0, 0, 620, 540, 0x120b06).setStrokeStyle(4, 0xffaa00);
-        const title = this.add.text(0, -220, 'ABOUT THE DEV', {
-            fontSize: '38px',
+        const title = this.add.text(0, -220, 'pa-kino SUPER', {
+            fontSize: '48px',
             fontFamily: '"VT323", monospace',
             color: '#ffcc00'
         }).setOrigin(0.5);
 
         const body = this.add.text(0, -70,
-            'Tuesday Cinema Games Presents:\n' +
-            'a Grounded Play github hosted\n' +
-            '-pakino- by Government Name of the Tuesday Cinema Club', {
+            'Tuesday Cinema Games presents pa-kino SUPER: a high-stakes Cinematic Pachinko Roguelite. Draft legendary directors, manage your production budget, and master the physics of the "Oscar" pegs in a quest for cinematic immortality.', {
                 fontSize: '28px',
                 fontFamily: '"VT323", monospace',
                 color: '#f0e4c8',
                 align: 'center',
-                lineSpacing: 10
+                lineSpacing: 8,
+                wordWrap: { width: 520 }
             }).setOrigin(0.5);
 
-        const linkLabel = this.add.text(0, 90, 'LINK:', {
+        const linkLabel = this.add.text(0, 60, 'LINK:', {
             fontSize: '24px',
             fontFamily: '"VT323", monospace',
             color: '#66f2ff'
         }).setOrigin(0.5);
 
-        const linkBtn = UI.createChunkyButton(this, 0, 150, 430, 70, 'TUESDAY CINEMA CLUB', () => {
+        const linkBtn = UI.createChunkyButton(this, 0, 120, 430, 70, 'TUESDAY CINEMA CLUB', () => {
             window.open('https://linktr.ee/Tuesday_Cinema_Club', '_blank', 'noopener,noreferrer');
         }, 'OPEN LINKTR.EE');
 
-        const closeBtn = UI.createChunkyButton(this, 0, 238, 220, 60, 'CLOSE', () => {
+        const closeBtn = UI.createChunkyButton(this, 0, 200, 220, 60, 'CLOSE', () => {
             container.closeModal();
         });
 
