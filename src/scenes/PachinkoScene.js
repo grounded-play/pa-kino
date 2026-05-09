@@ -1638,7 +1638,7 @@ export default class PachinkoScene extends Phaser.Scene {
             this.sound.play('sfx_abandon', { volume: 0.9 * (GameState.getAudioSettings(this).sfxVolume ?? 1) });
         }
         UI.createWheelTransition(this, 'out', () => {
-            this.scene.start('DirectorCutScene', GameState.createRunRecap({ abandoned: true }));
+            this.scene.start('GameOverScene', { win: false, abandoned: true });
         });
     }
     addBark(textStr, anchor = null) {
@@ -1750,7 +1750,7 @@ export default class PachinkoScene extends Phaser.Scene {
         if (this.ballsRemaining <= 0 && this.activeBalls.length === 0) {
             this.isLevelActive = false;
             UI.createWheelTransition(this, 'out', () => {
-                this.scene.start('DirectorCutScene', GameState.createRunRecap({ win: false }));
+                this.scene.start('GameOverScene', { win: false });
             });
         }
     }
@@ -1781,8 +1781,12 @@ export default class PachinkoScene extends Phaser.Scene {
             this.triggerMasterpieceAnimation();
         } else {
             UI.createWheelTransition(this, 'out', () => {
-                GameState.advanceFilm();
-                this.scene.start('DirectorCutScene', GameState.createRunRecap({ win: true }));
+                const isRunFinished = GameState.advanceFilm();
+                if (isRunFinished) {
+                    this.scene.start('GameOverScene', { win: true });
+                } else {
+                    this.scene.start('ShopScene');
+                }
             });
         }
     }
@@ -1826,8 +1830,12 @@ export default class PachinkoScene extends Phaser.Scene {
             ease: 'Bounce.easeOut',
             onComplete: () => {
                 this.time.delayedCall(2500, () => {
-                    GameState.advanceFilm();
-                    this.scene.start('DirectorCutScene', GameState.createRunRecap({ win: true }));
+                    const isRunFinished = GameState.advanceFilm();
+                    if (isRunFinished) {
+                        this.scene.start('GameOverScene', { win: true });
+                    } else {
+                        this.scene.start('ShopScene');
+                    }
                 });
             }
         });

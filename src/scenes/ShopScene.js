@@ -263,7 +263,7 @@ export default class ShopScene extends Phaser.Scene {
                     this.sound.play('sfx_abandon', { volume: 0.9 * (GameState.getAudioSettings(this).sfxVolume ?? 1) });
                 }
                 UI.createWheelTransition(this, 'out', () => {
-                    this.scene.start('DirectorCutScene', GameState.createRunRecap({ abandoned: true }));
+                    this.scene.start('GameOverScene', { win: false, abandoned: true });
                 });
             }
         });
